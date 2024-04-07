@@ -2,100 +2,131 @@ import csv
 import time
 from discord import User
 import requests
+import aiosqlite
+import aiohttp
 
-headers = {"Authorization":"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6Ijc3ODc4NTgyMjgyODI2NTUxNCIsImJvdCI6dHJ1ZSwiaWF0IjoxNzAzNzkzNDM0fQ.Z51Wy-UOn4r9CqzG8lhWEynSpSWS6mQ6tkZmLyNWI68"}
+with open('jaja.txt','r') as f:
+	headers = {'Authorization':f.readlines()[1]}
 
-def add_remind(user: int,channel_id: int,reason: str,days: int=0,hours: int=0,minutes: int=0,is_dm="") -> str:
-	user_voted = requests.get(f"https://top.gg/api/bots/778785822828265514/check?userId={user}",headers=headers).json()
-	print(user_voted,user)
+class Reader:
+
+	def __init__(self, path: str = "users.db") -> None:
+		self.path = path
+	
+	async def __aenter__(self):
+		self.connection = await aiosqlite.connect(database=self.path)
+		self.cursor = await self.connection.cursor()
+		return self
+
+	async def __aexit__(self, *args):
+		await self.cursor.close()
+		await self.connection.close()
+
+	async def make_table(self) -> None:
+		await self.cursor.execute("""
+		CREATE TABLE IF NOT EXISTS usuarios (
+			user INTEGER,
+			timestamp INTEGER,
+			reason TEXT,
+			channel INTEGER,
+			id INTEGER
+		)
+		""")
+	
+	async def max_id(self, user: int) -> int:
+		await self.cursor.execute("""
+		SELECT id FROM usuarios
+		WHERE user = ?
+		ORDER BY id DESC LIMIT 1
+		""",(user,))
+		value = await self.cursor.fetchone()
+		return value[0] if value is not None else 0
+	
+	async def new_reminder(self, user: int, id: int, timestamp: float, channel_id: int,reason: str) -> None:
+		await self.cursor.execute("""
+		INSERT INTO usuarios VALUES
+		(?, ?, ?, ?, ?)
+		""",(user,timestamp,reason,channel_id,id))
+		await self.connection.commit()
+
+	async def delete_value(self, user: int, id: int) -> None:
+		if await self.load_remind(user=user,id=id) is None:
+			raise ValueError(f'No reminder of id **{id}** found')
+		await self.cursor.execute("""
+		DELETE from usuarios WHERE user = ? AND id = ?
+		""",(user,id))
+		await self.connection.commit()
+
+	async def load_remind(self, user: int, id: int) -> tuple:
+		await self.cursor.execute("""
+		SELECT * FROM usuarios
+		WHERE user = ? AND id = ?
+		""",(user,id))
+		return await self.cursor.fetchone()
+	
+	async def load_all_user_reminders(self, user: int) -> list[tuple]:
+		await self.cursor.execute("""
+		SELECT id FROM usuarios
+		WHERE user = ? ORDER BY id ASC
+		""",(user,))
+		return await self.cursor.fetchall()
+
+	async def load_timestamp(self,actual_time: int) -> tuple:
+		await self.cursor.execute("""
+		SELECT * FROM usuarios
+		WHERE timestamp < ?
+		ORDER BY timestamp ASC LIMIT 1
+		""",(actual_time,))
+		return await self.cursor.fetchone()
+	
+	async def load_everything(self) -> list[tuple]:
+		await self.cursor.execute("""
+		SELECT * FROM usuarios
+		""")
+		return await self.cursor.fetchall()
+
+async def add_remind(user: int,channel_id: int,reason: str, days: int, hours: int, minutes: int) -> dict[str,int]:
+	async with aiohttp.ClientSession() as session:
+		async with session.get(f"https://top.gg/api/bots/778785822828265514/check?userId={user}",headers=headers) as resp:
+			data = await resp.json()
 	try:
-		user_voted = user_voted['voted']
+		user_voted = data['voted']
 	except KeyError:
-		pass
-	if len(reason) > 100 and user_voted != 1:
-		return "Your reminder's reason is way too big, to have a bigger limit please consider giving me a vote on <https://top.gg/bot/778785822828265514/vote> :D"
-	if len(reason) > 1500:
-		return "You can't have a reminder with a reason with more than 1500 characters"
+		user_voted = 0
+	if len(reason) > 50 and user_voted != 1:
+		raise ValueError("Your reminder's reason is way too big, to have a bigger limit please consider giving me a vote on <https://top.gg/bot/778785822828265514/vote> :D")
+	if len(reason) > 500:
+		raise ValueError("Your reminder's reason is way too big, to avoid excesive flood, the max length of your reason must not be larger than 500 characters")
 	timestamp = int(time.time())+(days*86400)+(hours*3600)+(minutes*60)
-	id = 0
 	if timestamp - time.time() > 31536000:
-		return "You can't have a reminder with a time longer than a year"
-	with open("tasks.csv","r") as f:
-		reader = csv.reader(f,delimiter="-")
-		for line in reader:
-			if str(user) == line[0]:
-				id += 1
-				# return "You already have a reminder scheduled!"
-	if id > 10 and user_voted != 1:
-		return "You can only have a maximum of 10 reminders at once, you can have even more reminders if you give me a vote on <https://top.gg/bot/778785822828265514/vote> :D"
-	if id > 100:
-		return "You have reached the limit of reminders you can have at once :("
-	with open("tasks.csv","a",newline="") as f:
-		writer = csv.writer(f,delimiter="-")
-		writer.writerow([user,timestamp,channel_id,reason,id,is_dm])
-	return f'Reminder for <t:{timestamp}> of id `{id}` with reason: "{reason}" added successfully'
+		raise ValueError("You can't have a reminder with a time longer than a year")
+	async with Reader() as f:
+		user_max_id = await f.max_id(user)
+		print(user_max_id)
+		await f.new_reminder(user=user,id=user_max_id+1,timestamp=timestamp,channel_id=channel_id,reason=reason)
+	
+	return {'id':user_max_id+1,'timestamp':timestamp}
 
-def remove_reminder(user: int,id: str) -> str:
-	lines = []
-	done = "You have no reminder with that id"
-	with open("tasks.csv","r+",newline="") as f:
-		reader = csv.reader(f,delimiter="-")
-		for line in reader:
-			# print(line,line[4],line[4]==str(id))
-			if str(user) not in line[0]:
-				lines.append(line)
-			else:
-				if str(id) not in line[4]:
-					lines.append(line)
-				else:
-					done = f"Removed reminder of id `{id}` successfully"
-		f.seek(0)
-		f.truncate()
-		writer = csv.writer(f,delimiter="-")
-		writer.writerows(lines)
-	return done
+async def remove_remind(user: int, id: int):
+	async with Reader() as f:
+		await f.delete_value(user=user,id=id)
 
+async def check_remind(user: int, id: int) -> tuple:
+	async with Reader() as f:
+		value = await f.load_remind(user=user,id=id)
+		if value is None and await f.load_all_user_reminders(user=user) == []:
+			raise ValueError(f'No reminder of id **{id}** found')
+		elif value is None:
+			raise TypeError(await f.load_all_user_reminders(user=user))
+		return value
 
-def check_remind() -> tuple | bool:
-	with open("tasks.csv","r") as f:
-		reader = csv.reader(f,delimiter="-")
-		for line in reader:
-			if time.time() > int(line[1]):
-				return int(line[0]),int(line[2]),line[3],line[4],line[5]
-	return False
+async def check_remind_fire():
+	async with Reader() as f:
+		value = await f.load_timestamp(actual_time=int(time.time()))
+		if value is None:
+			raise ValueError('No reminder to fire')
+		return value
 
-def user_check_remind(user: int,id: int) -> tuple | str:
-	amount = 0
-	ids = ""
-	reminder = ""
-	with open("tasks.csv","r") as f:
-		reader = csv.reader(f,delimiter="-")
-		for line in reader:
-			if str(user) in line[0]:
-				ids += f"{line[4]} "
-				amount += 1
-				if str(id) in line[4]:
-					reminder = line[1],line[3]
-				# reminder = f"You have a reminder for <t:{line[1]}> of id `{id}` with reason: {line[3]}.\nTotal reminders = {amount}"
-		if reminder:
-			return f"You have a reminder for <t:{reminder[0]}> of id {id} with reason: {reminder[1]}\nTotal reminders = {amount}"
-	if not ids:
-		ids = "No reminders"
-	return False,ids
-
-# remove_reminder("holyhosting")
-
-# print(add_remind("holyhosting",minutes=1))
-
-
-
-# with open("names.csv","a",newline="") as f:
-# 	writer = csv.writer(f,delimiter="-")
-# 	writer.writerow(["hi","how","are- youx"])
-# 	writer.writerow(["hi","how","are youd"])
-# 	writer.writerow(["hi","how","are youe"])
-
-# with open("names.csv","r") as f:
-# 	reader = csv.reader(f,delimiter="-")
-# 	for line in reader:
-# 		print(line)
+async def manual_add(user: int, channel_id: int, reason: str, timestamp: int, id: int):
+	async with Reader() as f:
+		await f.new_reminder(user=user,id=id,timestamp=timestamp,reason=reason,channel_id=channel_id)
