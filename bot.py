@@ -60,6 +60,8 @@ def run_discord_bot():
 
 	@client.command()
 	async def seeallreminders(ctx: commands.Context):
+		if ctx.author.id != 624277615951216643:
+			return
 		async with remind.Reader() as f:
 			await ctx.send(f'{await f.load_everything()}')
 
