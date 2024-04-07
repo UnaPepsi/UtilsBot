@@ -62,8 +62,15 @@ def run_discord_bot():
 	async def seeallreminders(ctx: commands.Context):
 		if ctx.author.id != 624277615951216643:
 			return
+		content = ''
 		async with remind.Reader() as f:
-			await ctx.send(f'{await f.load_everything()}')
+			for item in await f.load_everything():
+				content += f'**User**: {item[0]}\n'
+				content += f'**Timestamp**: <:t{item[1]}>\n'
+				content += f'**Reason**: {item[2]}\n'
+				content += f'**Channel**: {item[3]}\n'
+				content += f'**ID**: {item[4]}\n'
+			await ctx.send(content=content)
 
 
 	@client.tree.command(description="Adds a reminder")
