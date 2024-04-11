@@ -4,7 +4,35 @@ from discord.ext import commands,tasks
 
 def run_discord_bot():
 	client = commands.Bot(command_prefix="xd",intents=discord.Intents.all())
-		
+	
+	class Snooze(discord.ui.Button):
+		def __init__(self, minutes_added: int, reason: str, original_user_id: int):
+			super().__init__(style=discord.ButtonStyle.green,label=f"Snooze ({minutes_added} minutes)")
+			self.reason = f"{reason} (snoozed)"
+			self.minutes_added = minutes_added
+			self.original_user_id = original_user_id
+		async def callback(self, interaction: discord.Interaction):
+			if interaction.user.id != self.original_user_id:
+				await interaction.response.send_message("You can't snooze a reminder that isn't yours",ephemeral=True)
+				return
+			self.disabled = True
+			self.view_ = discord.ui.View(timeout=1)
+			# self.view_.add_item(self)
+			# self.view_.add_item(discord.ui.Button(style=discord.ButtonStyle.green,label=f"Snooze for {15-self.minutes_added} minutes",disabled=True))
+			self.view_.add_item(discord.ui.Button(style=discord.ButtonStyle.green,label=f"Snooze for 5 minutes",disabled=True))
+			self.view_.add_item(discord.ui.Button(style=discord.ButtonStyle.green,label=f"Snooze for 10 minutes",disabled=True))
+			embed = discord.Embed()
+			try:
+				values = await remind.add_remind(user=self.original_user_id,channel_id=interaction.channel_id,reason=self.reason,days=0,hours=0,minutes=self.minutes_added)
+				embed.title = "Reminder snoozed!"
+				embed.description = f"Reminder for <t:{values['timestamp']}> of id **{values['id']}**\nwith reason **\"{self.reason}\"** added successfully"
+				embed.colour = discord.Colour.green()
+			except ValueError as e:
+				embed.title = "Reminder failed"
+				embed.description = str(e)
+				embed.colour = discord.Colour.red()
+			await interaction.response.edit_message(embed=embed,view=self.view_)
+
 	@client.event
 	async def on_ready():
 		print(f"Bot is running. Currently in {len(client.guilds)} servers:")
@@ -22,6 +50,9 @@ def run_discord_bot():
 			items = await remind.check_remind_fire()
 		except ValueError:
 			return
+		view = discord.ui.View(timeout=None)
+		view.add_item(Snooze(minutes_added=5,reason=items[2],original_user_id=items[0]))
+		view.add_item(Snooze(minutes_added=10,reason=items[2],original_user_id=items[0]))
 		embed = discord.Embed(
 			title = 'You have been reminded!',
 			description= f'Reason of your reminder: **{items[2]}**',
@@ -29,13 +60,13 @@ def run_discord_bot():
 		)
 		try:
 			channel = await client.fetch_channel(items[3])
-			await channel.send(f'<@{items[0]}>',embed=embed)
+			await channel.send(f'<@{items[0]}>',embed=embed,view=view)
 			await remind.remove_remind(items[0],items[4])
 		except (discord.Forbidden,discord.HTTPException):
 			try:
 				user = await client.fetch_user(items[0])
 				dm_channel = await user.create_dm()
-				await dm_channel.send(f'<@{items[0]}>',embed=embed)
+				await dm_channel.send(f'<@{items[0]}>',embed=embed,view=view)
 				await dm_channel.send('_Sending the reminder in your desired channel failed. So I instead reminded you here_')
 				await remind.remove_remind(items[0],items[4])
 			except (discord.HTTPException,discord.NotFound,discord.Forbidden):
@@ -66,7 +97,7 @@ def run_discord_bot():
 		async with remind.Reader() as f:
 			for item in await f.load_everything():
 				content += f'**User**: {item[0]}\n'
-				content += f'**Timestamp**: <:t{item[1]}>\n'
+				content += f'**Timestamp**: <t:{item[1]}>\n'
 				content += f'**Reason**: {item[2]}\n'
 				content += f'**Channel**: {item[3]}\n'
 				content += f'**ID**: {item[4]}\n'

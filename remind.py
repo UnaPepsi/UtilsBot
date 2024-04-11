@@ -86,6 +86,9 @@ class Reader:
 		return await self.cursor.fetchall()
 
 async def add_remind(user: int,channel_id: int,reason: str, days: int, hours: int, minutes: int) -> dict[str,int]:
+	timestamp = int(time.time())+(days*86400)+(hours*3600)+(minutes*60)
+	if timestamp - time.time() > 31536000:
+		raise ValueError("You can't have a reminder with a time longer than a year")
 	async with aiohttp.ClientSession() as session:
 		async with session.get(f"https://top.gg/api/bots/778785822828265514/check?userId={user}",headers=headers) as resp:
 			data = await resp.json()
@@ -97,10 +100,12 @@ async def add_remind(user: int,channel_id: int,reason: str, days: int, hours: in
 		raise ValueError("Your reminder's reason is way too big, to have a bigger limit please consider giving me a vote on <https://top.gg/bot/778785822828265514/vote> :D")
 	if len(reason) > 500:
 		raise ValueError("Your reminder's reason is way too big, to avoid excesive flood, the max length of your reason must not be larger than 500 characters")
-	timestamp = int(time.time())+(days*86400)+(hours*3600)+(minutes*60)
-	if timestamp - time.time() > 31536000:
-		raise ValueError("You can't have a reminder with a time longer than a year")
 	async with Reader() as f:
+		reminders_amount = len(await f.load_all_user_reminders(user=user))
+		if reminders_amount > 5 and user_voted != 1:
+			raise ValueError("You can only have a maximum of 5 reminders at once, to be able to have more reminders consider giving me a vote on <https://top.gg/bot/778785822828265514/vote> :D")
+		if reminders_amount > 50:
+			raise ValueError("You can't have more than 50 reminders active")
 		user_max_id = await f.max_id(user)
 		print(user_max_id)
 		await f.new_reminder(user=user,id=user_max_id+1,timestamp=timestamp,channel_id=channel_id,reason=reason)
