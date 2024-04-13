@@ -8,7 +8,7 @@ def run_discord_bot():
 	class Snooze(discord.ui.Button):
 		def __init__(self, minutes_added: int, reason: str, original_user_id: int):
 			super().__init__(style=discord.ButtonStyle.green,label=f"Snooze ({minutes_added} minutes)")
-			self.reason = f"{reason} (snoozed)"
+			self.reason = f"{reason} (snoozed)" if "(snoozed)" not in reason else reason
 			self.minutes_added = minutes_added
 			self.original_user_id = original_user_id
 		async def callback(self, interaction: discord.Interaction):
@@ -31,13 +31,13 @@ def run_discord_bot():
 				embed.title = "Reminder failed"
 				embed.description = str(e)
 				embed.colour = discord.Colour.red()
-			await interaction.response.edit_message(embed=embed,view=self.view_)
+			await interaction.response.edit_message(content=None,embed=embed,view=self.view_)
 
 	@client.event
 	async def on_ready():
 		print(f"Bot is running. Currently in {len(client.guilds)} servers:")
 		for guild in client.guilds:
-			print(f"{guild.name} ({guild.member_count} members)")
+			print(f"{guild.name} ({guild.member_count:,} members)")
 		async with remind.Reader() as f:
 			await f.make_table()
 			print('table')
