@@ -78,6 +78,7 @@ def run_discord_bot():
 	async def botsync(ctx: commands.Context):
 		if ctx.author.id != 624277615951216643:
 			return
+		await ctx.send("synced")
 		await client.tree.sync()
 
 	@client.command()
@@ -151,6 +152,20 @@ def run_discord_bot():
 			embed.description = f'No reminder of id **{id}** found.\nYour reminders: '
 			for item in eval(str(e)):
 				embed.description += f'**{item[0]}** '
+			embed.colour = discord.Colour.red()
+		await interaction.response.send_message(embed=embed)
+
+	@client.tree.command(description="Edits a reminder")
+	async def editreminder(interaction: discord.Interaction, id: int, reason: str = '', days: int = 0, hours: int = 0, minutes: int = 0):
+		embed = discord.Embed()
+		try:
+			items = await remind.edit_remind(user=interaction.user.id,id=id,reason=reason,days=days,hours=hours,minutes=minutes)
+			embed.title = f"Edited reminder of id {id}"
+			embed.description = f'This reminder will fire at <t:{items[1]}>\nWith reason **{items[2]}**'
+			embed.colour = discord.Colour.green()
+		except ValueError as e:
+			embed.title = "Couldn't edit reminder"
+			embed.description = str(e)
 			embed.colour = discord.Colour.red()
 		await interaction.response.send_message(embed=embed)
 
