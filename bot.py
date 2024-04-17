@@ -35,7 +35,8 @@ def run_discord_bot():
 
 	@client.event
 	async def on_ready():
-		print(f"Bot is running. Currently in {len(client.guilds)} servers:")
+		print(f"bot running")
+		print(f"{client.user} currently in {len(client.guilds)} servers:")
 		for guild in client.guilds:
 			print(f"{guild.name} ({guild.member_count:,} members)")
 		async with remind.Reader() as f:
