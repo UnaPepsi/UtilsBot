@@ -1,14 +1,15 @@
 import discord,remind
 from discord.ext import commands,tasks
-
+import asyncio
+from time import time
 
 def run_discord_bot():
-	client = commands.Bot(command_prefix="xd",intents=discord.Intents.all())
+	client = commands.Bot(command_prefix="xd",intents=discord.Intents.all(),activity=discord.Game(name="Check 'About me'"))
 	
 	class Snooze(discord.ui.Button):
 		def __init__(self, minutes_added: int, reason: str, original_user_id: int):
-			super().__init__(style=discord.ButtonStyle.green,label=f"Snooze ({minutes_added} minutes)")
-			self.reason = f"{reason} (snoozed)" if "(snoozed)" not in reason else reason
+			super().__init__(style=discord.ButtonStyle.green,label=f"Snooze for {minutes_added} minutes")
+			self.reason = f"{reason} (snoozed)" if not reason.endswith('(snoozed)') else reason
 			self.minutes_added = minutes_added
 			self.original_user_id = original_user_id
 		async def callback(self, interaction: discord.Interaction):
@@ -31,8 +32,14 @@ def run_discord_bot():
 				embed.title = "Reminder failed"
 				embed.description = str(e)
 				embed.colour = discord.Colour.red()
+			except TypeError:
+				print(f"something wrong happened, channel_id: {interaction.channel_id}")
 			await interaction.response.edit_message(content=None,embed=embed,view=self.view_)
-
+	class SnoozeView(discord.ui.View):
+		def __init__(self,timeout: float):
+			super().__init__(timeout=timeout)
+		async def on_timeout(self):
+			await self.message.edit(view=None)
 	@client.event
 	async def on_ready():
 		print(f"bot running")
@@ -51,29 +58,33 @@ def run_discord_bot():
 			items = await remind.check_remind_fire()
 		except ValueError:
 			return
-		view = discord.ui.View(timeout=None)
-		view.add_item(Snooze(minutes_added=5,reason=items[2],original_user_id=items[0]))
-		view.add_item(Snooze(minutes_added=10,reason=items[2],original_user_id=items[0]))
+		task_list = []
+		for item in items:
+			task_list.append(asyncio.create_task(send_reminders(item)))
+		await asyncio.gather(*task_list)
+
+	async def send_reminders(item: tuple[int,int,str,int,int]):
+		await remind.remove_remind(item[0],item[4])
+		view = SnoozeView(timeout=3600)
+		view.add_item(Snooze(minutes_added=5,reason=item[2],original_user_id=item[0]))
+		view.add_item(Snooze(minutes_added=10,reason=item[2],original_user_id=item[0]))
+		await asyncio.sleep(item[1]-int(time()))
 		embed = discord.Embed(
 			title = 'You have been reminded!',
-			description= f'Reason of your reminder: **{items[2]}**',
+			description= f'Reason of your reminder: **{item[2]}**',
 			colour=discord.Colour.green()
 		)
 		try:
-			channel = await client.fetch_channel(items[3])
-			await channel.send(f'<@{items[0]}>',embed=embed,view=view)
-			await remind.remove_remind(items[0],items[4])
+			channel = await client.fetch_channel(item[3])
+			view.message = await channel.send(f'<@{item[0]}>',embed=embed,view=view)
 		except (discord.Forbidden,discord.HTTPException):
 			try:
-				user = await client.fetch_user(items[0])
+				user = await client.fetch_user(item[0])
 				dm_channel = await user.create_dm()
-				await dm_channel.send(f'<@{items[0]}>',embed=embed,view=view)
+				view.message = await dm_channel.send(f'<@{item[0]}>',embed=embed,view=view)
 				await dm_channel.send('_Sending the reminder in your desired channel failed. So I instead reminded you here_')
-				await remind.remove_remind(items[0],items[4])
 			except (discord.HTTPException,discord.NotFound,discord.Forbidden):
-				await remind.remove_remind(items[0],items[4])
-				return
-
+				print(f"Couldn't send reminder to user {item[0]}")
 
 	@client.command()
 	async def botsync(ctx: commands.Context):
@@ -110,6 +121,10 @@ def run_discord_bot():
 	async def addreminder(interaction: discord.Interaction,reason: str,days: int = 0,hours: int = 0, minutes: int = 0):
 		embed = discord.Embed()
 		try:
+			if (days == 0 and hours == 0 and minutes == 0 and interaction.user.id != 624277615951216643):
+				raise ValueError("You need to specify a time for the reminder")
+			if ((days*86400) + (hours*3600) + (minutes*60)) < 0:
+				raise ValueError("You can't have a negative time for the reminder")
 			values = await remind.add_remind(user=interaction.user.id,channel_id=interaction.channel_id,reason=reason,days=days,hours=hours,minutes=minutes)
 			embed.title = "Reminder created!"
 			embed.description = f"Reminder for <t:{values['timestamp']}> of id **{values['id']}**\nwith reason **\"{reason}\"** added successfully"

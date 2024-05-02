@@ -1,7 +1,6 @@
 import csv
 import time
 from discord import User
-import requests
 import aiosqlite
 import aiohttp
 
@@ -72,20 +71,20 @@ class Reader:
 		""",(user,id))
 		return await self.cursor.fetchone()
 	
-	async def load_all_user_reminders(self, user: int) -> list[tuple]:
+	async def load_all_user_reminders(self, user: int) -> list[tuple[int]]:
 		await self.cursor.execute("""
 		SELECT id FROM usuarios
 		WHERE user = ? ORDER BY id ASC
 		""",(user,))
 		return await self.cursor.fetchall()
 
-	async def load_timestamp(self,actual_time: int) -> tuple:
+	async def load_timestamp(self,actual_time: int) -> list[tuple]:
 		await self.cursor.execute("""
 		SELECT * FROM usuarios
-		WHERE timestamp < ?
-		ORDER BY timestamp ASC LIMIT 1
+		WHERE timestamp - ? < 20
+		ORDER BY timestamp ASC
 		""",(actual_time,))
-		return await self.cursor.fetchone()
+		return await self.cursor.fetchall()
 	
 	async def load_everything(self) -> list[tuple]:
 		await self.cursor.execute("""
@@ -93,7 +92,9 @@ class Reader:
 		""")
 		return await self.cursor.fetchall()
 
-async def add_remind(user: int,channel_id: int,reason: str, days: int, hours: int, minutes: int) -> dict[str,int]:
+async def add_remind(user: int,channel_id: int | None,reason: str, days: int, hours: int, minutes: int) -> dict[str,int]:
+	if channel_id is None:
+		raise TypeError("You must provide a channel_id")
 	timestamp = int(time.time())+(days*86400)+(hours*3600)+(minutes*60)
 	if timestamp - time.time() > 31536000:
 		raise ValueError("You can't have a reminder with a time longer than a year")
@@ -148,7 +149,7 @@ async def edit_remind(user: int, id: int, days: int = 0, hours: int = 0, minutes
 		return await f.load_remind(user=user,id=id)
 	
 
-async def check_remind(user: int, id: int) -> tuple:
+async def check_remind(user: int, id: int) -> tuple[int,int,str,int,int]:
 	async with Reader() as f:
 		value = await f.load_remind(user=user,id=id)
 		if value is None and await f.load_all_user_reminders(user=user) == []:
@@ -157,7 +158,7 @@ async def check_remind(user: int, id: int) -> tuple:
 			raise TypeError(await f.load_all_user_reminders(user=user))
 		return value
 
-async def check_remind_fire():
+async def check_remind_fire() -> list[tuple[int,int,str,int,int]]:
 	async with Reader() as f:
 		value = await f.load_timestamp(actual_time=int(time.time()))
 		if value is None:
