@@ -118,13 +118,12 @@ def run_discord_bot():
 
 
 	@client.tree.command(description="Adds a reminder")
+	@discord.app_commands.describe(reason="Your reminder's reason",days="Days to wait",hours="Hours to wait",minutes="Minutes to wait")
 	async def addreminder(interaction: discord.Interaction,reason: str,days: int = 0,hours: int = 0, minutes: int = 0):
 		embed = discord.Embed()
 		try:
-			if (days == 0 and hours == 0 and minutes == 0 and interaction.user.id != 624277615951216643):
-				raise ValueError("You need to specify a time for the reminder")
-			if ((days*86400) + (hours*3600) + (minutes*60)) < 0:
-				raise ValueError("You can't have a negative time for the reminder")
+			if ((days*86400) + (hours*3600) + (minutes*60)) <= 0:
+				raise ValueError("You need to specify a valid time for the reminder")
 			values = await remind.add_remind(user=interaction.user.id,channel_id=interaction.channel_id,reason=reason,days=days,hours=hours,minutes=minutes)
 			embed.title = "Reminder created!"
 			embed.description = f"Reminder for <t:{values['timestamp']}> of id **{values['id']}**\nwith reason **\"{reason}\"** added successfully"
@@ -136,6 +135,7 @@ def run_discord_bot():
 		await interaction.response.send_message(embed=embed)
 		
 	@client.tree.command(description="Removes your current reminder")
+	@discord.app_commands.describe(id="ID of the reminder to remove")
 	async def removereminder(interaction: discord.Interaction,id: int):
 		embed = discord.Embed()
 		try:
@@ -150,6 +150,7 @@ def run_discord_bot():
 		await interaction.response.send_message(embed=embed)
 
 	@client.tree.command(description="Checks a specific reminder given the ID (if any)")
+	@discord.app_commands.describe(id="ID of the reminder to check")
 	async def checkreminder(interaction: discord.Interaction,id: int):
 		embed = discord.Embed()
 		try:
@@ -172,6 +173,7 @@ def run_discord_bot():
 		await interaction.response.send_message(embed=embed)
 
 	@client.tree.command(description="Edits a reminder")
+	@discord.app_commands.describe(id="ID of the reminder to edit",reason="New reason for the reminder",days="New days to wait",hours="New hours to wait",minutes="New minutes to wait")
 	async def editreminder(interaction: discord.Interaction, id: int, reason: str = '', days: int = 0, hours: int = 0, minutes: int = 0):
 		embed = discord.Embed()
 		try:
