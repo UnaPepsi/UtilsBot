@@ -1,7 +1,12 @@
-import discord,remind
+import discord
+from utils import remind
 from discord.ext import commands,tasks
 import asyncio
 from time import time
+from dotenv import load_dotenv
+from os import environ
+
+load_dotenv()
 
 def run_discord_bot():
 	client = commands.Bot(command_prefix="xd",intents=discord.Intents.all(),activity=discord.Game(name="Check 'About me'"))
@@ -187,5 +192,7 @@ def run_discord_bot():
 			embed.colour = discord.Colour.red()
 		await interaction.response.send_message(embed=embed)
 
-	with open("jaja.txt","r") as f:
-		client.run(f.readlines()[0])
+	client.run(environ['TOKEN'])
+
+if __name__ == '__main__':
+	run_discord_bot()

@@ -3,9 +3,11 @@ import time
 from discord import User
 import aiosqlite
 import aiohttp
+from dotenv import load_dotenv
+from os import environ
+load_dotenv()
 
-with open('jaja.txt','r') as f:
-	headers = {'Authorization':f.readlines()[1]}
+headers = {'Authorization':environ['TOPGG']}
 
 class Reader:
 
