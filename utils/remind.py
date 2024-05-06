@@ -1,11 +1,7 @@
-import csv
 import time
-from discord import User
 import aiosqlite
 import aiohttp
-from dotenv import load_dotenv
 from os import environ
-load_dotenv()
 
 headers = {'Authorization':environ['TOPGG']}
 
@@ -76,14 +72,14 @@ class Reader:
 	async def load_all_user_reminders(self, user: int) -> list[tuple[int]]:
 		await self.cursor.execute("""
 		SELECT id FROM usuarios
-		WHERE user = ? ORDER BY id ASC
+		WHERE user = ? ORDER BY timestamp
 		""",(user,))
 		return await self.cursor.fetchall()
 
 	async def load_timestamp(self,actual_time: int) -> list[tuple]:
 		await self.cursor.execute("""
 		SELECT * FROM usuarios
-		WHERE timestamp - ? < 20
+		WHERE timestamp - ? < 12
 		ORDER BY timestamp ASC
 		""",(actual_time,))
 		return await self.cursor.fetchall()
@@ -102,11 +98,8 @@ async def add_remind(user: int,channel_id: int | None,reason: str, days: int, ho
 		raise ValueError("You can't have a reminder with a time longer than a year")
 	async with aiohttp.ClientSession() as session:
 		async with session.get(f"https://top.gg/api/bots/778785822828265514/check?userId={user}",headers=headers) as resp:
-			data = await resp.json()
-	try:
-		user_voted = data['voted']
-	except KeyError:
-		user_voted = 0
+			data: dict = await resp.json()
+	user_voted = data.get('voted',0)
 	if len(reason) > 50 and user_voted != 1:
 		raise ValueError("Your reminder's reason is way too big, to have a bigger limit please consider giving me a vote on <https://top.gg/bot/778785822828265514/vote> :D")
 	if len(reason) > 500:
@@ -118,7 +111,7 @@ async def add_remind(user: int,channel_id: int | None,reason: str, days: int, ho
 		if reminders_amount > 50:
 			raise ValueError("You can't have more than 50 reminders active")
 		user_max_id = await f.max_id(user)
-		print(user_max_id)
+		print(user_max_id,user_voted,user)
 		await f.new_reminder(user=user,id=user_max_id+1,timestamp=timestamp,channel_id=channel_id,reason=reason)
 	
 	return {'id':user_max_id+1,'timestamp':timestamp}
