@@ -232,3 +232,6 @@ class GiveawayCog(commands.GroupCog,name='giveaway'):
 		async with GiveawayDB() as gw:
 			a = await gw.select_all()
 			await ctx.send(content=f'{a}')
+
+async def setup(bot: commands.Bot):
+	await bot.add_cog(GiveawayCog(bot))

@@ -55,7 +55,10 @@ class RemindCog(commands.GroupCog,name='reminder'):
 		async with remind.Reader() as f:
 			await f.make_table()
 			print('table')
-		self.loop_check.start()
+		try:
+			self.loop_check.start()
+		except RuntimeError:
+			print('task already running. most likely because on_ready got called again')
 
 	
 	@tasks.loop(seconds=10)
@@ -192,3 +195,6 @@ class RemindCog(commands.GroupCog,name='reminder'):
 			embed.description = str(e)
 			embed.colour = discord.Colour.red()
 		await interaction.response.send_message(embed=embed)
+
+async def setup(bot: commands.Bot):
+	await bot.add_cog(RemindCog(bot))

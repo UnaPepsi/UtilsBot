@@ -3,6 +3,8 @@ from discord import app_commands
 from discord.ext import commands
 from utils.bypassUrl import bypass
 from utils.websiteSS import get_ss, BadURL, BadResponse
+from typing import Literal
+import os
 
 class RandomCog(commands.Cog):
 	def __init__(self, bot: commands.Bot):
@@ -62,3 +64,43 @@ class RandomCog(commands.Cog):
 			)
 			embed.set_image(url='attachment://image.png')
 			await interaction.followup.send(file=discord.File(fbytes,filename='image.png'),embed=embed)
+
+	@commands.command(name='rl')
+	@commands.is_owner()
+	async def reload_cog(self, ctx: commands.Context, cog: Literal['giveawayCog','randomCog','reminderCog']):
+		if ctx.author.id != 624277615951216643: #useless but just incase
+			print(ctx.author.id)
+			return
+		try:
+			await self.bot.reload_extension('cogs.'+cog)
+			await ctx.send(f'Reloaded {cog}')
+		except commands.ExtensionNotFound:
+			await ctx.send(f"Couldn't reload {cog}. Typo?")
+	@reload_cog.error
+	async def bad_command(self, ctx: commands.Context, error: commands.CommandError):
+		if isinstance(error,commands.BadLiteralArgument):
+			await ctx.send('bad argument')
+			return
+		if isinstance(error,commands.NotOwner):
+			print('no')
+			return
+		raise error
+		
+	@commands.command(name='git')
+	@commands.is_owner()
+	async def git_cmd(self, ctx:commands.Context, *, command: str):
+		if ctx.author.id != 624277615951216643:
+			print('nel')
+			return
+		code = os.popen(f'git {command}').read()
+		await ctx.send(code)
+
+	@git_cmd.error
+	async def bad_command(self, ctx: commands.Context, error: commands.CommandError):
+		if isinstance(error,commands.NotOwner):
+			print('no')
+			return
+		raise error
+		
+async def setup(bot: commands.Bot):
+	await bot.add_cog(RandomCog(bot))
