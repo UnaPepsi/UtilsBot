@@ -3,7 +3,7 @@ from typing import Self
 
 class GiveawayDB:
 
-	def __init__(self, path: str = 'giveaways.db') -> None:
+	def __init__(self, path: str = 'users.db') -> None:
 		self.path = path
 
 	async def __aenter__(self) -> Self:

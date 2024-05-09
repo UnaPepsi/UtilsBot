@@ -3,7 +3,7 @@ from discord.ext import commands, tasks
 from discord import app_commands, ui
 from datetime import timedelta
 import re
-from utils.giveaway import GiveawayDB #type: ignore
+from utils.giveaway import GiveawayDB
 from time import time
 from datetime import datetime
 import asyncio
@@ -38,11 +38,14 @@ def parse_duration(duration_str: str):
 		raise ValueError("Invalid duration format")
 
 class GiveawayView(discord.ui.View):
-	def __init__(self,timeout: float):
+	def __init__(self,timeout: float | None = None):
 		super().__init__(timeout=timeout)
 
 	@ui.button(label='Join Giveaway!',style=discord.ButtonStyle.green)
-	async def join_giveaway(self, interaction: discord.Interaction, button: discord.Button):
+	async def join_giveaway(self, interaction: discord.Interaction, button: ui.Button):
+		if interaction.message is None:
+			await interaction.response.send_message('Something went wrong :(',ephemeral=True)
+			return
 		async with GiveawayDB() as gw:
 			try:
 				assert await gw.giveaway_exists(giveaway_id=interaction.message.id) == True, 'Giveaway does not exists'
@@ -64,7 +67,13 @@ class GiveawayView(discord.ui.View):
 					await gw.delete_giveaway(giveaway_id=interaction.message.id)
 					await interaction.response.send_message('Seems like the message embed is missing, giveaway deleted')
 					return
-				embed.description = re.sub(r"Entries: \*\*.*?\*\*", f"Entries: **{participants}**", embed.description)
+				if embed.description is None:
+					embed.description = f"Ends: <t:{giveaway_info['time']}:R> (<t:{giveaway_info['time']}:T>)\n" + \
+					f"Hosted by: {interaction.user.mention}\n" + \
+					f"Entries: **{participants}**\n" + \
+					f"Winners: **{giveaway_info['winners']}**"
+				else:
+					embed.description = re.sub(r"Entries: \*\*.*?\*\*", f"Entries: **{participants}**", embed.description)
 				await interaction.message.edit(embed=embed)
 			await interaction.response.send_message('You have joined the giveaway!',ephemeral=True)
 
@@ -117,6 +126,9 @@ class GiveawayModal(ui.Modal,title='Creates a giveaway!'):
 			except ValueError: winners = 0
 			if winners < 1:
 				await interaction.response.send_message('At least 1 person has to win something :<',ephemeral=True)
+				return
+			if embed.description is None:
+				await interaction.response.send_message('Something went wrong :(',ephemeral=True)
 				return
 			embed.description += f'{winners}**'
 			view = GiveawayView(timeout=None)
@@ -204,10 +216,14 @@ class GiveawayCog(commands.GroupCog,name='giveaway'):
 	@app_commands.command(name='create',description='Creates a giveaway!')
 	@commands.has_permissions(manage_messages=True)
 	async def creategiveaway(self, interaction: discord.Interaction):
-		if interaction.user.id != 624277615951216643:
-			await interaction.response.send_message('This command is in development :(',ephemeral=True)
-			return
 		await interaction.response.send_modal(GiveawayModal())
+		
+	@creategiveaway.error
+	async def create_giveaway_error(slelf, interaction: discord.Interaction, error: discord.app_commands.AppCommandError):
+		if isinstance(error,discord.app_commands.MissingPermissions):
+			await interaction.response.send_message("You don't have permission to do this",ephemeral=True)
+		else:
+			raise error
 
 	@commands.command(name='check')
 	async def checkgiveaway(self, ctx: commands.Context):

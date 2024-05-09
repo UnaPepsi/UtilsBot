@@ -2,7 +2,7 @@ import discord
 from discord import app_commands
 from discord.ext import commands,tasks
 import asyncio
-from utils import remind,giveaway #type: ignore
+from utils import remind
 from time import time
 
 class RemindCog(commands.GroupCog,name='reminder'):
@@ -42,7 +42,10 @@ class RemindCog(commands.GroupCog,name='reminder'):
 		def __init__(self,timeout: float):
 			super().__init__(timeout=timeout)
 		async def on_timeout(self):
-			await self.message.edit(view=None)
+			try:
+				await self.message.edit(view=None)
+			except (discord.Forbidden,discord.HTTPException):
+				...
 
 	@commands.Cog.listener()
 	async def on_ready(self):
