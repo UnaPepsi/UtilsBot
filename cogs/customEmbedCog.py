@@ -3,7 +3,7 @@ from discord import app_commands
 from discord.ext import commands
 import re
 from datetime import datetime
-from utils.colors import colors, rgb_to_hex
+from utils.colors import def_colors, rgb_to_hex
 from utils.customEmbed import CustomEmbed, BadTag, TagInUse
 from utils import perms
 import time
@@ -37,7 +37,7 @@ class EditEmbed:
 			return embed_size > 6000
 		class EmbedMaker(discord.ui.View):
 			def __init__(self, user_embed: discord.User):
-				super().__init__(timeout=None)
+				super().__init__(timeout=7200)
 				self.user_embed = user_embed
 
 			@discord.ui.select(cls=discord.ui.Select,placeholder='Edit the embed',
@@ -284,7 +284,7 @@ class EditEmbed:
 					await interaction.response.send_message("Invalid embed!",ephemeral=True)
 					return
 				valid_url = re.compile(r'http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*(),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+')
-				colors = colors()
+				colors = def_colors()
 				if not self.color_.value.isdigit():
 					try:  color_sel = colors[self.color_.value] if self.color_.value in list(colors) else int(self.color_.value[1:],16)
 					except ValueError: color_sel = None

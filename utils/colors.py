@@ -7,7 +7,7 @@ def rgb_to_hex(r: str, g: str, b: str) -> int:
         raise TypeError('Invalid RGB')
     return sum
 
-def colors():
+def def_colors():
     return {
         "black": 0x000000,
         "white": 0xFFFFFF,
