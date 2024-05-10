@@ -4,26 +4,28 @@ import discord
 from os import environ
 import asyncio
 from dotenv import load_dotenv
+from cogs.giveawayCog import GiveawayJoinDynamicButton
 load_dotenv()
 
 
-bot = commands.Bot(command_prefix="xd",intents=Intents.all(),activity=Game(name="Check 'About me'"))
 discord.utils.setup_logging()
 
-async def main():
-	# await bot.add_cog(RemindCog(bot))
-	# await bot.add_cog(GiveawayCog(bot))
-	# await bot.add_cog(RandomCog(bot))
-	await bot.load_extension('cogs.randomCog')
-	await bot.load_extension('cogs.giveawayCog')
-	await bot.load_extension('cogs.reminderCog')
-	await bot.load_extension('cogs.customEmbedCog')
+class Bot(commands.Bot):
+	def __init__(self,command_prefix: str,intents: Intents,activity: Game = None):
+		super().__init__(command_prefix=command_prefix,intents=intents,activity=activity)
 	
-	await bot.start(environ['TOKEN'])
+	async def setup_hook(self):
+		await bot.load_extension('cogs.randomCog')
+		await bot.load_extension('cogs.giveawayCog')
+		await bot.load_extension('cogs.reminderCog')
+		await bot.load_extension('cogs.customEmbedCog')
+		bot.add_dynamic_items(GiveawayJoinDynamicButton)
+
+bot = Bot(command_prefix='xd',intents=Intents.all(),activity=Game(name="Check 'About me'"))
 
 if __name__ == '__main__':
 	try:
-		asyncio.run(main())
+		asyncio.run(bot.start(environ['TOKEN']))
 	except KeyboardInterrupt:
 		asyncio.run(bot.close())
 		print("bot closed",bot.is_closed())

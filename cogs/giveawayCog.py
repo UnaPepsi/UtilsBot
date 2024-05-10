@@ -38,13 +38,18 @@ def parse_duration(duration_str: str):
 	else:
 		raise ValueError("Invalid duration format")
 
-class GiveawayView(discord.ui.View):
-	def __init__(self,timeout: float | None = None):
-		super().__init__(timeout=timeout)
+class GiveawayJoinDynamicButton(ui.DynamicItem[ui.Button],template=r'giveaway_join:channel_id:(?P<id>[0-9]+)'):
+	def __init__(self, channel_id: int):
+		super().__init__(ui.Button(label='Join Giveaway!',style=discord.ButtonStyle.green,custom_id=f'giveaway_join:channel_id:{channel_id}',emoji='\N{PARTY POPPER}'))
+		self.channel_id = channel_id
 
-	@ui.button(label='Join Giveaway!',style=discord.ButtonStyle.green)
-	async def join_giveaway(self, interaction: discord.Interaction, button: ui.Button):
-		if interaction.message is None:
+	@classmethod
+	async def from_custom_id(cls, interaction: discord.Interaction, item: ui.Button, match: re.Match[str], /):
+		channel_id = int(match['id'])
+		return cls(channel_id)
+
+	async def callback(self, interaction: discord.Interaction):
+		if interaction.message is None or interaction.message is None:
 			await interaction.response.send_message('Something went wrong :(',ephemeral=True)
 			return
 		async with GiveawayDB() as gw:
@@ -53,7 +58,9 @@ class GiveawayView(discord.ui.View):
 				if not await gw.user_already_in(user=interaction.user.id,giveaway_id=interaction.message.id):
 					await gw.insert_user(user=interaction.user.id,giveaway_id=interaction.message.id)
 				else:
-					await interaction.response.send_message('You are already participating!',ephemeral=True)
+					view = ui.View(timeout=60)
+					view.add_item(GiveawayLeaveButton(giveaway_id=interaction.message.id))
+					await interaction.response.send_message('You are already participating!',view=view,ephemeral=True)
 					return
 			except AssertionError as e:
 				await interaction.response.send_message('Something wrong happened :(',ephemeral=True)
@@ -61,7 +68,7 @@ class GiveawayView(discord.ui.View):
 				return
 			async with GiveawayDB() as gw:
 				participants = len(await gw.fetch_participants(giveaway_id=interaction.message.id))
-				giveaway_info: dict[str,int | str] = await gw.fetch_giveaway(giveaway_id=interaction.message.id)
+				# giveaway_info: dict[str,int | str] = await gw.fetch_giveaway(giveaway_id=interaction.message.id)
 				try:
 					embed = interaction.message.embeds[0]
 				except IndexError:
@@ -69,14 +76,56 @@ class GiveawayView(discord.ui.View):
 					await interaction.response.send_message('Seems like the message embed is missing, giveaway deleted')
 					return
 				if embed.description is None:
-					embed.description = f"Ends: <t:{giveaway_info['time']}:R> (<t:{giveaway_info['time']}:T>)\n" + \
-					f"Hosted by: {interaction.user.mention}\n" + \
-					f"Entries: **{participants}**\n" + \
-					f"Winners: **{giveaway_info['winners']}**"
+					await interaction.response.send_message('Something wrong happened',ephemeral=True)
+					return
 				else:
-					embed.description = re.sub(r"Entries: \*\*.*?\*\*", f"Entries: **{participants}**", embed.description)
+					pattern = r"Entries: \*\*.*?\*\*"
+					matches = list(re.finditer(pattern, embed.description))
+					if matches:
+						last_match = matches[-1]
+						start_index = last_match.start()
+						end_index = last_match.end()
+						embed.description = embed.description[:start_index] + re.sub(pattern, f"Entries: **{participants}**", embed.description[start_index:end_index]) + embed.description[end_index:]
 				await interaction.message.edit(embed=embed)
 			await interaction.response.send_message('You have joined the giveaway!',ephemeral=True)
+
+class GiveawayLeaveButton(ui.Button):
+	def __init__(self, giveaway_id: int):
+		super().__init__(emoji='\N{NO ENTRY}',label='Leave giveaway',style=discord.ButtonStyle.red)
+		self.giveaway_id = giveaway_id
+	async def callback(self, interaction: discord.Interaction):
+		if interaction.channel is None or interaction.message is None:
+			return
+		async with GiveawayDB() as gw:
+			try:
+				await gw.remove_user(user=interaction.user.id,giveaway_id=self.giveaway_id)
+			except AssertionError as e:
+				await interaction.response.send_message('Hmm... something went wrong...',ephemeral=True)
+				print(e)
+				return
+			try: participants = len(await gw.fetch_participants(giveaway_id=self.giveaway_id))
+			except AssertionError: participants = 0
+			# giveaway_info: dict[str,int | str] = await gw.fetch_giveaway(giveaway_id=self.giveaway_id)
+			try:
+				msg = await interaction.channel.fetch_message(self.giveaway_id)
+				embed = msg.embeds[0]
+			except IndexError:
+				await gw.delete_giveaway(giveaway_id=self.giveaway_id)
+				await interaction.response.send_message('Seems like the message embed is missing, giveaway deleted')
+				return
+			if embed.description is None:
+				await interaction.response.send_message('Something wrong happened',ephemeral=True)
+				return
+			else:
+				pattern = r"Entries: \*\*.*?\*\*"
+				matches = list(re.finditer(pattern, embed.description))
+				if matches:
+					last_match = matches[-1]
+					start_index = last_match.start()
+					end_index = last_match.end()
+					embed.description = embed.description[:start_index] + re.sub(pattern, f"Entries: **{participants}**", embed.description[start_index:end_index]) + embed.description[end_index:]
+			await msg.edit(embed=embed)
+			await interaction.response.send_message('You are no longer participating in the giveaway!',ephemeral=True)
 
 class GiveawayModal(ui.Modal,title='Creates a giveaway!'):
 		_prize = ui.TextInput(
@@ -99,6 +148,8 @@ class GiveawayModal(ui.Modal,title='Creates a giveaway!'):
 			max_length=2
 		)
 		async def on_submit(self, interaction: discord.Interaction):
+			if interaction.channel is None:
+				return
 			c_time = int(time())
 			if self._duration.value.isdecimal():
 				when = int(self._duration.value)
@@ -132,7 +183,8 @@ class GiveawayModal(ui.Modal,title='Creates a giveaway!'):
 				await interaction.response.send_message('Something went wrong :(',ephemeral=True)
 				return
 			embed.description += f'{winners}**'
-			view = GiveawayView(timeout=None)
+			view = ui.View(timeout=None)
+			view.add_item(GiveawayJoinDynamicButton(interaction.channel_id))
 			await interaction.response.send_message(embed=embed,view=view)
 			msg_id = await interaction.original_response()
 			async with GiveawayDB() as gw:
@@ -174,10 +226,9 @@ class GiveawayCog(commands.GroupCog,name='giveaway'):
 			print("embed")
 			channel = await self.bot.fetch_channel(item[1])
 			msg = await channel.fetch_message(item[0])
-			view = discord.ui.View.from_message(msg)
-			view.stop()
 			embed = msg.embeds[0]
-			embed.description = embed.description.replace('Ends','Ended')
+			parts = embed.description.rsplit('Ends',)
+			embed.description = 'Ended'.join(parts)
 		except (discord.HTTPException,discord.Forbidden,discord.NotFound,discord.InvalidData):
 			await delgiveaway()
 			return
@@ -206,7 +257,7 @@ class GiveawayCog(commands.GroupCog,name='giveaway'):
 					else:
 						print("empty")
 						winners += f'<@{winners_id.pop(0)[0]}> '
-				await msg.reply(f"The giveaway for {prize} has ended! Winners: {winners}")
+				await msg.reply(f"The giveaway for `{prize}` has ended! Winners: {winners}")
 				await msg.edit(embed=embed,view=None)
 				await delgiveaway()
 			except (discord.Forbidden,discord.HTTPException):

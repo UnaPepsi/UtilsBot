@@ -36,8 +36,10 @@ class GiveawayDB:
 
 	async def fetch_participants(self,*,giveaway_id: int) -> list[tuple[int,str]]:
 		await self.cursor.execute("""
-		SELECT DISTINCT participant_id, prize FROM giveaways
-		JOIN participants ON giveaway_id = ?
+		SELECT DISTINCT participants.participant_id, giveaways.prize 
+		FROM giveaways
+		INNER JOIN participants ON giveaways.id = participants.giveaway_id
+		WHERE participants.giveaway_id = ?
 		""",(giveaway_id,))
 		results = await self.cursor.fetchall()
 		assert results != [], 'No participants'
