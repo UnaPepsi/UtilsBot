@@ -17,6 +17,7 @@ async def main():
 	await bot.load_extension('cogs.randomCog')
 	await bot.load_extension('cogs.giveawayCog')
 	await bot.load_extension('cogs.reminderCog')
+	await bot.load_extension('cogs.customEmbedCog')
 	
 	await bot.start(environ['TOKEN'])
 

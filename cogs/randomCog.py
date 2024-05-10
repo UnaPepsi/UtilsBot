@@ -46,6 +46,7 @@ class RandomCog(commands.Cog):
 	
 	@app_commands.command(name='screenshot',description='Takes a screenshot of a given website')
 	@app_commands.describe(link='The URL of the desired website screenshot')
+	@app_commands.guild_only()
 	async def screenshot(self, interaction: discord.Interaction, link: str):
 		if not interaction.channel.is_nsfw():
 			await interaction.response.send_message('This command is only available for channels with NSFW enabled')
@@ -67,15 +68,22 @@ class RandomCog(commands.Cog):
 
 	@commands.command(name='rl')
 	@commands.is_owner()
-	async def reload_cog(self, ctx: commands.Context, cog: Literal['giveawayCog','randomCog','reminderCog']):
+	async def reload_cog(self, ctx: commands.Context, cog: Literal['giveawayCog','randomCog','reminderCog','customEmbedCog','all']):
 		if ctx.author.id != 624277615951216643: #useless but just incase
 			print(ctx.author.id)
 			return
-		try:
-			await self.bot.reload_extension('cogs.'+cog)
-			await ctx.send(f'Reloaded {cog}')
-		except commands.ExtensionNotFound:
-			await ctx.send(f"Couldn't reload {cog}. Typo?")
+		async def reload_cog(cog: str) -> None:
+			try:
+				await self.bot.reload_extension('cogs.'+cog)
+				await ctx.send(f'Reloaded {cog}')
+			except commands.ExtensionNotFound:
+				await ctx.send(f"Couldn't reload {cog}. Typo?")
+		if cog == 'all':
+			for item in ('giveawayCog','randomCog','reminderCog','customEmbedCog'):
+				await reload_cog(item)
+		else:
+			await reload_cog(cog)
+		
 	@reload_cog.error
 	async def bad_command(self, ctx: commands.Context, error: commands.CommandError):
 		if isinstance(error,commands.BadLiteralArgument):

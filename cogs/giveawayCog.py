@@ -4,6 +4,7 @@ from discord import app_commands, ui
 from datetime import timedelta
 import re
 from utils.giveaway import GiveawayDB
+from utils import perms
 from time import time
 from datetime import datetime
 import asyncio
@@ -214,14 +215,15 @@ class GiveawayCog(commands.GroupCog,name='giveaway'):
 
 		
 	@app_commands.command(name='create',description='Creates a giveaway!')
-	@commands.has_permissions(manage_messages=True)
+	@app_commands.checks.has_permissions(manage_messages=True)
 	async def creategiveaway(self, interaction: discord.Interaction):
 		await interaction.response.send_modal(GiveawayModal())
 		
 	@creategiveaway.error
-	async def create_giveaway_error(slelf, interaction: discord.Interaction, error: discord.app_commands.AppCommandError):
-		if isinstance(error,discord.app_commands.MissingPermissions):
-			await interaction.response.send_message("You don't have permission to do this",ephemeral=True)
+	async def create_giveaway_error(self, interaction: discord.Interaction, error: app_commands.AppCommandError):
+		if isinstance(error,app_commands.MissingPermissions):
+			missing_perms = await perms.format_miss_perms(error.missing_permissions)
+			await interaction.response.send_message(f"You need `{missing_perms}` to do this",ephemeral=True)
 		else:
 			raise error
 
