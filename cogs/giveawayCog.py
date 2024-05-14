@@ -167,7 +167,7 @@ class GiveawayModal(ui.Modal,title='Creates a giveaway!'):
 			embed = discord.Embed(
 				title = self._prize.value,
 				description = f"{self._description.value}\n\n" +
-				f"Ends: <t:{when+c_time}:R> (<t:{when}:T>)\n" +
+				f"Ends: <t:{when+c_time}:R> (<t:{when+c_time}:T>)\n" +
 				f"Hosted by: {interaction.user.mention}\n"+
 				f"Entries: **0**\n"+
 				"Winners: **",
