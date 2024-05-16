@@ -23,7 +23,8 @@ class GiveawayDB:
 			channel_id INTEGER NOT NULL,
 			timestamp INTEGER NOT NULL,
 			prize TEXT NOT NULL,
-			winners INTEGER NOT NULL
+			winners INTEGER NOT NULL,
+			hoster_id INTEGER NOT NULL
 		)
 		""")
 		await self.cursor.execute("""
@@ -51,7 +52,7 @@ class GiveawayDB:
 		""",(giveaway_id,))
 		results = await self.cursor.fetchone()
 		assert results is not None, 'No giveaway found'
-		return {'id':results[0],'channel_id':results[1],'timestamp':results[2],'prize':results[3],'winners':results[4]}
+		return {'id':results[0],'channel_id':results[1],'timestamp':results[2],'prize':results[3],'winners':results[4],'hoster_id':results[5]}
 
 	async def giveaway_exists(self,*,giveaway_id: int) -> bool:
 		"""
@@ -73,10 +74,10 @@ class GiveawayDB:
 		assert results != [], 'No giveaway to fire'
 		return results
 	
-	async def create_giveaway(self, *,id: int, channel_id:int, time: int, prize: str, winners: int) -> None:
+	async def create_giveaway(self, *,id: int, channel_id:int, time: int, prize: str, winners: int, user_id: int) -> None:
 		await self.cursor.execute("""
-		INSERT INTO giveaways VALUES (?, ?, ?, ?, ?)
-		""",(id,channel_id,time,prize,winners))
+		INSERT INTO giveaways VALUES (?, ?, ?, ?, ?, ?)
+		""",(id,channel_id,time,prize,winners,user_id))
 		await self.connection.commit()
 
 	async def delete_giveaway(self, giveaway_id: int) -> None:
@@ -118,3 +119,11 @@ class GiveawayDB:
 		""")
 		part = await self.cursor.fetchall()
 		return {'giv':giv,'part':part}
+
+	async def fetch_hosted_giveaways(self, user_id: int) -> int:
+		await self.cursor.execute("""
+		SELECT COUNT(hoster_id) FROM giveaways
+		WHERE hoster_id = ?
+		""",(user_id,))
+		result = await self.cursor.fetchone()
+		return result[0] if result != None else 0

@@ -9,6 +9,7 @@ from time import time
 from datetime import datetime
 import asyncio
 from random import randint
+from utils.userVoted import has_user_voted
 
 def parse_duration(duration_str: str):
 	pattern = r"""
@@ -150,6 +151,15 @@ class GiveawayModal(ui.Modal,title='Creates a giveaway!'):
 		async def on_submit(self, interaction: discord.Interaction):
 			if interaction.channel is None:
 				return
+			async with GiveawayDB() as gw:
+				amount_of_giveaways = await gw.fetch_hosted_giveaways(user_id=interaction.user.id)
+				user_voted = await has_user_voted(user_id=interaction.user.id)
+			if amount_of_giveaways > 4 and not user_voted:
+				await interaction.response.send_message("You can't have more than 5 giveaways active at once. Consider giving me a [vote](<https://top.gg/bot/778785822828265514/vote>) to increase the limit :D")
+				return
+			elif amount_of_giveaways > 50:
+				await interaction.response.send_message("You can't have more than 50 giveaways active at once")
+				return
 			c_time = int(time())
 			if self._duration.value.isdecimal():
 				when = int(self._duration.value)
@@ -188,7 +198,7 @@ class GiveawayModal(ui.Modal,title='Creates a giveaway!'):
 			await interaction.response.send_message(embed=embed,view=view)
 			msg_id = await interaction.original_response()
 			async with GiveawayDB() as gw:
-				await gw.create_giveaway(id=msg_id.id,channel_id=msg_id.channel.id,time=when+c_time,prize=self._prize.value,winners=winners)
+				await gw.create_giveaway(id=msg_id.id,channel_id=msg_id.channel.id,time=when+c_time,prize=self._prize.value,winners=winners,user_id=interaction.user.id)
 
 
 class GiveawayCog(commands.GroupCog,name='giveaway'):
@@ -199,7 +209,7 @@ class GiveawayCog(commands.GroupCog,name='giveaway'):
 	async def loop_check(self):
 		try:
 			async with GiveawayDB() as gw:
-				items: tuple[int,int,int,str,int] = await gw.check_timestamp_fire(time=int(time()))
+				items: tuple[int,int,int,str,int,int] = await gw.check_timestamp_fire(time=int(time()))
 		except AssertionError:
 			return
 		task_list = []
@@ -214,7 +224,17 @@ class GiveawayCog(commands.GroupCog,name='giveaway'):
 			print('table2')
 		self.loop_check.start()
 
-	async def send_giveaways(self, item: tuple[int,int,int,str,int]):
+	@commands.Cog.listener()
+	async def on_raw_message_delete(self, payload: discord.RawMessageDeleteEvent):
+		async with GiveawayDB() as gw:
+			try:
+				_ = await gw.fetch_giveaway(giveaway_id=payload.message_id)
+			except AssertionError:
+				return
+			await gw.delete_giveaway(giveaway_id=payload.message_id)
+			print(f'giveaway {payload.message_id} deleted')
+
+	async def send_giveaways(self, item: tuple[int,int,int,str,int,int]):
 		async def delgiveaway():
 			try:
 				async with GiveawayDB() as gw:
@@ -267,16 +287,47 @@ class GiveawayCog(commands.GroupCog,name='giveaway'):
 		
 	@app_commands.command(name='create',description='Creates a giveaway!')
 	@app_commands.checks.has_permissions(manage_messages=True)
-	async def creategiveaway(self, interaction: discord.Interaction):
+	async def create_giveaway(self, interaction: discord.Interaction):
 		await interaction.response.send_modal(GiveawayModal())
 		
-	@creategiveaway.error
+	@create_giveaway.error
 	async def create_giveaway_error(self, interaction: discord.Interaction, error: app_commands.AppCommandError):
 		if isinstance(error,app_commands.MissingPermissions):
 			missing_perms = await perms.format_miss_perms(error.missing_permissions)
 			await interaction.response.send_message(f"You need `{missing_perms}` to do this",ephemeral=True)
 		else:
 			raise error
+
+	@app_commands.describe(id='The message ID of the giveaway')
+	@app_commands.command(name='remove',description='Removes an owned giveaway')
+	async def remove_giveaway(self, interaction: discord.Interaction, id: str):
+		try: id = int(id)
+		except ValueError: await interaction.response.send_message('Must be a valid Discord ID');return
+		async with GiveawayDB() as gw:
+			try:
+				giveaway = await gw.fetch_giveaway(giveaway_id=id)
+			except AssertionError:
+				await interaction.response.send_message('Hmm... giveaway not found, remember the id is the id of the giveaway message',ephemeral=True)
+				return
+			if giveaway['hoster_id'] != interaction.user.id:
+				await interaction.response.send_message("You have not created this giveaway!\n_If you're an admin you can remove a giveaway just by deleting the message_",ephemeral=True)
+				return
+			try:
+				message = await interaction.channel.fetch_message(id)
+			except discord.NotFound:
+				await interaction.response.send_message('This giveaway exists, though the message id was not found. If this giveaway was made in another **channel** please use the command there',ephemeral=True)
+				return
+			except discord.Forbidden:
+				await interaction.response.send_message('I have no permission to fetch messages from this channel :(',ephemeral=True)
+				return
+			try:
+				await message.delete()
+			except (discord.Forbidden,discord.NotFound):
+				await interaction.response.send_message('Either I have no permissions or the giveaway message has already been deleted',ephemeral=True)
+				return
+			await gw.delete_giveaway(giveaway_id=id)
+			await interaction.response.send_message('Giveaway deleted!',ephemeral=True)
+
 
 	@commands.command(name='check')
 	async def checkgiveaway(self, ctx: commands.Context):

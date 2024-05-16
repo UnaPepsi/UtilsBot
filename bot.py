@@ -1,11 +1,11 @@
+from dotenv import load_dotenv
+load_dotenv()
 from discord import Intents, Game
 from discord.ext import commands
 import discord
 from os import environ
 import asyncio
-from dotenv import load_dotenv
 from cogs.giveawayCog import GiveawayJoinDynamicButton
-load_dotenv()
 
 
 discord.utils.setup_logging()

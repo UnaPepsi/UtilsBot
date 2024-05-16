@@ -118,11 +118,11 @@ class RemindCog(commands.GroupCog,name='reminder'):
 		content = ''
 		async with remind.Reader() as f:
 			for item in await f.load_everything():
-				content += f'**User**: {item[0]}\n'
-				content += f'**Timestamp**: <t:{item[1]}>\n'
-				content += f'**Reason**: {item[2]}\n'
-				content += f'**Channel**: {item[3]}\n'
-				content += f'**ID**: {item[4]}\n'
+				content += f'**User**: {item[0]}\n' \
+				f'**Timestamp**: <t:{item[1]}>\n' \
+				f'**Reason**: {item[2]}\n' \
+				f'**Channel**: {item[3]}\n' \
+				f'**ID**: {item[4]}\n' 
 			await ctx.send(content=content)
 
 
@@ -186,6 +186,8 @@ class RemindCog(commands.GroupCog,name='reminder'):
 	async def editreminder(self, interaction: discord.Interaction, id: int, reason: str = '', days: int = 0, hours: int = 0, minutes: int = 0):
 		embed = discord.Embed()
 		try:
+			if ((days*86400) + (hours*3600) + (minutes*60)) <= 0:
+				raise ValueError("You need to specify a valid time for the reminder")
 			items = await remind.edit_remind(user=interaction.user.id,id=id,reason=reason,days=days,hours=hours,minutes=minutes)
 			embed.title = f"Edited reminder of id {id}"
 			embed.description = f'This reminder will fire at <t:{items[1]}>\nWith reason **{items[2]}**'
