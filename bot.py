@@ -19,6 +19,7 @@ class Bot(commands.Bot):
 		await bot.load_extension('cogs.giveawayCog')
 		await bot.load_extension('cogs.reminderCog')
 		await bot.load_extension('cogs.customEmbedCog')
+		await bot.load_extension('cogs.todoCog')
 		bot.add_dynamic_items(GiveawayJoinDynamicButton)
 
 bot = Bot(command_prefix='xd',intents=Intents.all(),activity=Game(name="Check 'About me'"))

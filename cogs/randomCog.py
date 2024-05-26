@@ -10,6 +10,7 @@ class RandomCog(commands.Cog):
 	def __init__(self, bot: commands.Bot):
 		self.bot = bot
 	
+	@app_commands.checks.cooldown(2,5,key=lambda i: i.user.id)
 	@app_commands.command(name='bypassurl',description='Tries to unshorten a URL')
 	@app_commands.describe(url='The URL to unshorten')
 	async def bypassurl(self, interaction: discord.Interaction, url: str):
@@ -29,6 +30,7 @@ class RandomCog(commands.Cog):
 		embed.set_image(url=user.display_avatar.url)
 		await interaction.response.send_message(embed=embed)
 
+	@app_commands.checks.cooldown(2,5,key=lambda i: i.user.id)
 	@app_commands.command(name='suggestion',description="Gives a suggestion to the bot's author :)")
 	@app_commands.describe(suggestion='The suggestion to give')
 	async def suggest(self, interaction: discord.Interaction, suggestion: str):
@@ -44,6 +46,7 @@ class RandomCog(commands.Cog):
 		await dm_channel.send(embed=embed)
 		await interaction.response.send_message('Suggestion sent. Thank you :D',ephemeral=True)
 	
+	@app_commands.checks.cooldown(2,12,key=lambda i: i.user.id)
 	@app_commands.command(name='screenshot',description='Takes a screenshot of a given website')
 	@app_commands.describe(link='The URL of the desired website screenshot')
 	@app_commands.guild_only()
@@ -66,9 +69,14 @@ class RandomCog(commands.Cog):
 			embed.set_image(url='attachment://image.png')
 			await interaction.followup.send(file=discord.File(fbytes,filename='image.png'),embed=embed)
 
+	async def cog_app_command_error(self, interaction: discord.Interaction, error: app_commands.AppCommandError):
+		if isinstance(error, discord.app_commands.errors.CommandOnCooldown):
+			await interaction.response.send_message("Please don't spam this command :(",ephemeral=True)
+		else: raise error
+
 	@commands.command(name='rl')
 	@commands.is_owner()
-	async def reload_cog(self, ctx: commands.Context, cog: Literal['giveawayCog','randomCog','reminderCog','customEmbedCog','all']):
+	async def reload_cog(self, ctx: commands.Context, cog: Literal['giveawayCog','randomCog','reminderCog','customEmbedCog','todoCog','all']):
 		if ctx.author.id != 624277615951216643: #useless but just incase
 			print(ctx.author.id)
 			return
@@ -79,7 +87,7 @@ class RandomCog(commands.Cog):
 			except commands.ExtensionNotFound:
 				await ctx.send(f"Couldn't reload {cog}. Typo?")
 		if cog == 'all':
-			for item in ('giveawayCog','randomCog','reminderCog','customEmbedCog'):
+			for item in ('giveawayCog','randomCog','reminderCog','customEmbedCog','todoCog'):
 				await reload_cog(item)
 		else:
 			await reload_cog(cog)

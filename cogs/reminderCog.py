@@ -51,7 +51,7 @@ class RemindCog(commands.GroupCog,name='reminder'):
 	async def on_ready(self):
 		print(f"{self.bot.user} currently in {len(self.bot.guilds)} servers:")
 		for guild in self.bot.guilds:
-			print(f"{guild.name} ({guild.member_count:,} members)")
+			print(f"{guild.name} ({guild.member_count:,} members) ({guild.id} {guild.owner_id})")
 		async with remind.Reader() as f:
 			await f.make_table()
 			print('table')
@@ -122,10 +122,10 @@ class RemindCog(commands.GroupCog,name='reminder'):
 				f'**Timestamp**: <t:{item[1]}>\n' \
 				f'**Reason**: {item[2]}\n' \
 				f'**Channel**: {item[3]}\n' \
-				f'**ID**: {item[4]}\n' 
+				f'**ID**: {item[4]}\n'
 			await ctx.send(content=content)
 
-
+	@app_commands.checks.cooldown(2,7,key=lambda i: i.user.id)
 	@app_commands.command(description="Adds a reminder",name='add')
 	@app_commands.describe(reason="Your reminder's reason",days="Days to wait",hours="Hours to wait",minutes="Minutes to wait")
 	async def addreminder(self, interaction: discord.Interaction,reason: str,days: int = 0,hours: int = 0, minutes: int = 0):
@@ -142,6 +142,11 @@ class RemindCog(commands.GroupCog,name='reminder'):
 			embed.description = str(e)
 			embed.colour = discord.Colour.red()
 		await interaction.response.send_message(embed=embed)
+	@addreminder.error
+	async def add_reminder_error(self, interaction: discord.Interaction, error: app_commands.AppCommandError):
+		if isinstance(error, app_commands.errors.CommandOnCooldown):
+			await interaction.response.send_message("Please don't spam this command :(",ephemeral=True)
+		else: raise error
 		
 	@app_commands.command(description="Removes your current reminder",name='remove')
 	@app_commands.describe(id="ID of the reminder to remove")
