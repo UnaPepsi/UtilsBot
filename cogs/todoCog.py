@@ -14,13 +14,16 @@ class TodoPaginator(ui.View):
 		self.user_view = user_view
 		self.edit_children()
 
+	async def on_timeout(self):
+		await self.message.edit(view=None)
+
 	async def check_todo(self, *, interaction: discord.Interaction, user: int, id: int):
-		print(self.pages,self.index,self.pages[self.index])
 		if interaction.user.id != self.user_view:
 			await interaction.response.send_message(f'<@{self.user_view}> ran this command so only them can interact with it',ephemeral=True)
 			return
 		async with TodoDB() as todo:
 			try:
+				self.pages = await todo.load_all_user_todos_id(user=user)
 				t = await todo.load_todo(user=user,id=id)
 			except NoTodoFound:
 				await interaction.response.edit_message(content='Something wrong happened :(',embed=None,view=None)
@@ -51,6 +54,26 @@ class TodoPaginator(ui.View):
 		self.index -= 1
 		await self.check_todo(interaction=interaction,user=interaction.user.id,id=self.pages[self.index])
 	
+	@ui.button(emoji='\N{WASTEBASKET}',style=discord.ButtonStyle.red)
+	async def remove_todo(self, interaction: discord.Interaction, button: discord.Button):
+		if interaction.user.id != self.user_view:
+			await interaction.response.send_message(f'<@{self.user_view}> ran this command so only them can interact with it',ephemeral=True)
+			return
+		async with TodoDB() as todo:
+			try:
+				await todo.delete_todo(user=interaction.user.id,id=self.pages.pop(self.index))
+				self.index -= 1 if self.index != 0 else 0
+			except NoTodoFound:
+				await interaction.response.edit_message(content='Something wrong happened :(',embed=None,view=None)
+				return
+		if len(self.pages) != 0:
+			await self.check_todo(interaction=interaction,user=interaction.user.id,id=self.pages[self.index])
+			return
+		embed = discord.Embed(
+			title='No more tasks',colour=discord.Colour.red(),description='You have no more tasks saved'
+		)
+		await interaction.response.edit_message(embed=embed,view=None)
+
 	@ui.button(label='>',style=discord.ButtonStyle.secondary)
 	async def go_forward(self, interaction: discord.Interaction, button: discord.Button):
 		self.index += 1
@@ -61,6 +84,27 @@ class TodoPaginator(ui.View):
 		self.index = len(self.pages)-1
 		await self.check_todo(interaction=interaction,user=interaction.user.id,id=self.pages[self.index])
 	
+class TodoRemoveButton(ui.Button):
+	def __init__(self, id: int, user_button: int):
+		super().__init__(label='Remove TODO task',emoji='\N{WASTEBASKET}',style=discord.ButtonStyle.red)
+		self.id = id
+		self.user_button = user_button
+	async def callback(self, interaction: discord.Interaction):
+		if interaction.user.id != self.user_button:
+			await interaction.response.send_message(f'<@{self.user_view}> ran this command so only them can interact with it',ephemeral=True)
+			return
+		embed = discord.Embed()
+		async with TodoDB() as todo:
+			try:
+				await todo.delete_todo(user=self.user_button,id=self.id)
+				embed.title = 'Task marked as solved!'
+				embed.description = f'TODO task of ID `{self.id}` removed'
+				embed.colour = discord.Colour.green()
+			except NoTodoFound as e:
+				embed.title = 'Task removal failed'
+				embed.description = str(e)
+				embed.colour = discord.Colour.red()
+		await interaction.response.edit_message(embed=embed,view=None)
 
 class TODOCog(commands.GroupCog,name='task'):
 	def __init__(self, bot: commands.Bot):
@@ -138,11 +182,16 @@ class TODOCog(commands.GroupCog,name='task'):
 				embed.set_thumbnail(url=interaction.user.display_avatar.url)
 				embed.set_footer(text=f'ID of task: {t.id}')
 				embed.timestamp = datetime.fromtimestamp(t.timestamp)
+				view = ui.View(timeout=360)
+				view.add_item(TodoRemoveButton(id,interaction.user.id))
+				view.on_timeout = lambda : view.message.edit(view=None)
 			except NoTodoFound as e:
 				embed.title = 'No task found'
 				embed.description = str(e)
 				embed.colour = discord.Colour.red()
-		await interaction.response.send_message(embed=embed)
+				view = discord.utils.MISSING
+		await interaction.response.send_message(embed=embed,view=view)
+		view.message = await interaction.original_response()
 
 	@app_commands.command(name='list')
 	async def todo_list(self, interaction: discord.Interaction):
@@ -167,6 +216,7 @@ class TODOCog(commands.GroupCog,name='task'):
 				embed.colour = discord.Colour.red()
 				view = discord.utils.MISSING
 		await interaction.response.send_message(embed=embed,view=view)
+		view.message = await interaction.original_response()
 
 async def setup(bot: commands.Bot):
 	await bot.add_cog(TODOCog(bot))

@@ -1,5 +1,5 @@
 import aiosqlite
-from typing import Optional, Self, Union
+from typing import Optional, Self
 from utils.userVoted import has_user_voted
 
 class NoTodoFound(Exception): ...
@@ -48,9 +48,9 @@ class TodoDB:
 		timestamp `int`: The creation time of the Todo
 		reason `str`: The reason of the Todo creation
 		"""
-		if len(reason) > 50 and not has_user_voted(user_id=user):
+		if len(reason) > 50 and not await has_user_voted(user_id=user):
 			raise BadTodo("Your task's reason is way too big, to have a bigger limit please consider giving me a [vote](<https://top.gg/bot/778785822828265514/vote>) :D")
-		elif (task_amounts:=await self.load_todo_amounts(user=user)) > 10 and not has_user_voted(user_id=user):
+		elif (task_amounts:=await self.load_todo_amounts(user=user)) > 10 and not await has_user_voted(user_id=user):
 			raise BadTodo("You can't have more than 10 active tasks at once. Consider giving me a [vote](<https://top.gg/bot/778785822828265514/vote>) to increase the limit :D")
 		elif len(reason) > 250:
 			raise BadTodo("Your task's reason can't be larger than 250 characters")
@@ -60,7 +60,7 @@ class TodoDB:
 		INSERT INTO todos VALUES (?, (SELECT IFNULL(MAX(id)+1,0) FROM todos WHERE user=?), ?, ?)
 		""",(user,user,timestamp,reason))
 		await self.connection.commit()
-		return Todo(user,await self.load_todo_amounts(user=user),timestamp=timestamp,reason=reason)
+		return Todo(user,await self.load_todo_amounts(user=user)-1,timestamp=timestamp,reason=reason)
 
 	async def delete_todo(self, *, user: int, id: int) -> None:
 		"""
@@ -111,7 +111,7 @@ class TodoDB:
 		results = await self.cursor.fetchone()
 		if results is None:
 			if (user_todo_ids := await self.load_all_user_todos_id(user=user)) is not None:
-				raise NoTodoFound(f'No task of ID **{id}** found.\n<@{user}> tasks: {" ".join(map(str,user_todo_ids))}')
+				raise NoTodoFound(f'No task of ID **{id}** found.\n<@{user}> tasks: {" ".join(map(format_numbers,user_todo_ids))}')
 			else:
 				raise NoTodoFound('You have no tasks saved')
 		return Todo(*results)
@@ -140,3 +140,6 @@ class TodoDB:
 		""",(user,))
 		result = await self.cursor.fetchone()
 		return result[0] if result is not None else 0
+
+def format_numbers(number: int) -> str:
+	return f'`{number}`'
