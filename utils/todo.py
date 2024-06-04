@@ -116,17 +116,18 @@ class TodoDB:
 				raise NoTodoFound('You have no tasks saved')
 		return Todo(*results)
 	
-	async def load_all_user_todos_id(self, *, user: int) -> Optional[list[int]]:
+	async def load_all_user_todos_id(self, *, user: int, limit: int = -1) -> Optional[list[int]]:
 		"""
 		Returns all the IDs
 
 		user `int`: The user ID
+		limit `int`: The lookup limit
 		"""
 
 		await self.cursor.execute("""
 		SELECT id FROM todos
-		WHERE user = ?
-		""",(user,))
+		WHERE user = ? LIMIT ?
+		""",(user,limit))
 		results = await self.cursor.fetchall()
 		return [result[0] for result in results] if results != [] else None
 

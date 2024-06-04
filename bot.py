@@ -4,6 +4,7 @@ from discord import Intents, Game
 from discord.ext import commands
 import discord
 from os import environ
+from typing import Optional
 import asyncio
 from cogs.giveawayCog import GiveawayJoinDynamicButton
 
@@ -11,7 +12,7 @@ from cogs.giveawayCog import GiveawayJoinDynamicButton
 discord.utils.setup_logging()
 
 class Bot(commands.Bot):
-	def __init__(self,command_prefix: str,intents: Intents,activity: Game = None):
+	def __init__(self,command_prefix: str,intents: Intents,activity: Optional[Game] = None):
 		super().__init__(command_prefix=command_prefix,intents=intents,activity=activity)
 	
 	async def setup_hook(self):

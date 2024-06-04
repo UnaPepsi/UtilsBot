@@ -108,6 +108,9 @@ class GiveawayLeaveButton(ui.Button):
 			except AssertionError: participants = 0
 			# giveaway_info: dict[str,int | str] = await gw.fetch_giveaway(giveaway_id=self.giveaway_id)
 			try:
+				if isinstance(interaction.channel,(discord.ForumChannel,discord.CategoryChannel)):
+					await interaction.response.send_message('Something wrong happened',ephemeral=True)
+					return
 				msg = await interaction.channel.fetch_message(self.giveaway_id)
 				embed = msg.embeds[0]
 			except IndexError:
@@ -194,7 +197,7 @@ class GiveawayModal(ui.Modal,title='Creates a giveaway!'):
 				return
 			embed.description += f'{winners}**'
 			view = ui.View(timeout=None)
-			view.add_item(GiveawayJoinDynamicButton(interaction.channel_id))
+			view.add_item(GiveawayJoinDynamicButton(interaction.channel.id))
 			await interaction.response.send_message(embed=embed,view=view)
 			msg_id = await interaction.original_response()
 			async with GiveawayDB() as gw:
@@ -209,7 +212,7 @@ class GiveawayCog(commands.GroupCog,name='giveaway'):
 	async def loop_check(self):
 		try:
 			async with GiveawayDB() as gw:
-				items: tuple[int,int,int,str,int,int] = await gw.check_timestamp_fire(time=int(time()))
+				items: list[tuple[int,int,int,str,int,int]] = await gw.check_timestamp_fire(time=int(time()))
 		except AssertionError:
 			return
 		task_list = []
@@ -245,11 +248,13 @@ class GiveawayCog(commands.GroupCog,name='giveaway'):
 		try:
 			print("embed")
 			channel = await self.bot.fetch_channel(item[1])
-			msg = await channel.fetch_message(item[0])
+			msg: discord.Message = await channel.fetch_message(item[0]) #type: ignore
 			embed = msg.embeds[0]
+			if embed is None or embed.description is None:
+				raise TypeError()
 			parts = embed.description.rsplit('Ends',)
 			embed.description = 'Ended'.join(parts)
-		except (discord.HTTPException,discord.Forbidden,discord.NotFound,discord.InvalidData):
+		except (discord.HTTPException,discord.Forbidden,discord.NotFound,discord.InvalidData,TypeError):
 			await delgiveaway()
 			return
 		try:
@@ -293,7 +298,7 @@ class GiveawayCog(commands.GroupCog,name='giveaway'):
 	@create_giveaway.error
 	async def create_giveaway_error(self, interaction: discord.Interaction, error: app_commands.AppCommandError):
 		if isinstance(error,app_commands.MissingPermissions):
-			missing_perms = await perms.format_miss_perms(error.missing_permissions)
+			missing_perms = perms.format_miss_perms(error.missing_permissions)
 			await interaction.response.send_message(f"You need `{missing_perms}` to do this",ephemeral=True)
 		else:
 			raise error
@@ -301,11 +306,11 @@ class GiveawayCog(commands.GroupCog,name='giveaway'):
 	@app_commands.describe(id='The message ID of the giveaway')
 	@app_commands.command(name='remove',description='Removes an owned giveaway')
 	async def remove_giveaway(self, interaction: discord.Interaction, id: str):
-		try: id = int(id)
+		try: int(id)
 		except ValueError: await interaction.response.send_message('Must be a valid Discord ID');return
 		async with GiveawayDB() as gw:
 			try:
-				giveaway = await gw.fetch_giveaway(giveaway_id=id)
+				giveaway = await gw.fetch_giveaway(giveaway_id=int(id))
 			except AssertionError:
 				await interaction.response.send_message('Hmm... giveaway not found, remember the id is the id of the giveaway message',ephemeral=True)
 				return
@@ -313,7 +318,7 @@ class GiveawayCog(commands.GroupCog,name='giveaway'):
 				await interaction.response.send_message("You have not created this giveaway!\n_If you're an admin you can remove a giveaway just by deleting the message_",ephemeral=True)
 				return
 			try:
-				message = await interaction.channel.fetch_message(id)
+				message = await interaction.channel.fetch_message(int(id)) #type: ignore
 			except discord.NotFound:
 				await interaction.response.send_message('This giveaway exists, though the message id was not found. If this giveaway was made in another **channel** please use the command there',ephemeral=True)
 				return
@@ -325,7 +330,7 @@ class GiveawayCog(commands.GroupCog,name='giveaway'):
 			except (discord.Forbidden,discord.NotFound):
 				await interaction.response.send_message('Either I have no permissions or the giveaway message has already been deleted',ephemeral=True)
 				return
-			await gw.delete_giveaway(giveaway_id=id)
+			# await gw.delete_giveaway(giveaway_id=id) on message delete already handles this
 			await interaction.response.send_message('Giveaway deleted!',ephemeral=True)
 
 

@@ -44,7 +44,7 @@ class GiveawayDB:
 		""",(giveaway_id,))
 		results = await self.cursor.fetchall()
 		assert results != [], 'No participants'
-		return results
+		return results #type: ignore
 	
 	async def fetch_giveaway(self,*,giveaway_id: int) -> dict[str,int | str]:
 		await self.cursor.execute("""
@@ -64,7 +64,7 @@ class GiveawayDB:
 		results = await self.cursor.fetchone()
 		return results != None
 
-	async def check_timestamp_fire(self,*, time: int) -> list[tuple[int,int,int,str,int]]:
+	async def check_timestamp_fire(self,*, time: int) -> list[tuple[int,int,int,str,int,int]]:
 		await self.cursor.execute("""
 		SELECT * from giveaways
 		WHERE timestamp - ? < 12
@@ -72,7 +72,7 @@ class GiveawayDB:
 		""",(time,))
 		results = await self.cursor.fetchall()
 		assert results != [], 'No giveaway to fire'
-		return results
+		return results #type: ignore
 	
 	async def create_giveaway(self, *,id: int, channel_id:int, time: int, prize: str, winners: int, user_id: int) -> None:
 		await self.cursor.execute("""
@@ -118,7 +118,7 @@ class GiveawayDB:
 		SELECT * FROM participants
 		""")
 		part = await self.cursor.fetchall()
-		return {'giv':giv,'part':part}
+		return {'giv':giv,'part':part} #type: ignore
 
 	async def fetch_hosted_giveaways(self, user_id: int) -> int:
 		await self.cursor.execute("""

@@ -51,7 +51,8 @@ class RandomCog(commands.Cog):
 	@app_commands.describe(link='The URL of the desired website screenshot')
 	@app_commands.guild_only()
 	async def screenshot(self, interaction: discord.Interaction, link: str):
-		if not interaction.channel.is_nsfw():
+		if interaction.channel is None: return
+		if isinstance(interaction.channel,(discord.DMChannel,discord.GroupChannel)) or not interaction.channel.is_nsfw():
 			await interaction.response.send_message('This command is only available for channels with NSFW enabled')
 			return
 		await interaction.response.defer()
@@ -93,7 +94,7 @@ class RandomCog(commands.Cog):
 			await reload_cog(cog)
 		
 	@reload_cog.error
-	async def bad_command(self, ctx: commands.Context, error: commands.CommandError):
+	async def reload_bad_command(self, ctx: commands.Context, error: commands.CommandError):
 		if isinstance(error,commands.BadLiteralArgument):
 			await ctx.send('bad argument')
 			return
@@ -112,7 +113,7 @@ class RandomCog(commands.Cog):
 		await ctx.send(code)
 
 	@git_cmd.error
-	async def bad_command(self, ctx: commands.Context, error: commands.CommandError):
+	async def git_bad_command(self, ctx: commands.Context, error: commands.CommandError):
 		if isinstance(error,commands.NotOwner):
 			print('no')
 			return

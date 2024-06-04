@@ -1,8 +1,9 @@
-def rgb_to_hex(r: str, g: str, b: str) -> int:
-    r,g,b = int(r),int(g),int(b)
+from typing import Union
+def rgb_to_hex(r: Union[str,int], g: Union[str,int], b: Union[str,int]) -> int:
+    r,g,b = int(r),int(g),int(b) #type: ignore
 
     print(type(r))
-    sum = (r << 16) + (g << 8) + b
+    sum = (r << 16) + (g << 8) + b #type: ignore
     if sum not in range(16777215+1):
         raise TypeError('Invalid RGB')
     return sum

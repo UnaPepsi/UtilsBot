@@ -17,7 +17,7 @@ async def has_user_voted(user_id: int) -> bool:
 		async with session.get(f"https://top.gg/api/bots/778785822828265514/check?userId={user_id}",headers=headers) as resp:
 			data: dict = await resp.json()
 	if data.get('retry-after',-1) != -1:
-		rate_limited = asyncio.create_task(wait_for_rate_limit(data.get('retry-after',-1)))
+		rate_limited = (asyncio.create_task(wait_for_rate_limit(data.get('retry-after',-1))),data.get('retry-after',-1))
 	user_voted = data.get('voted',0)
 	return user_voted == 1
 

@@ -64,14 +64,14 @@ class Reader:
 		SELECT * FROM usuarios
 		WHERE user = ? AND id = ?
 		""",(user,id))
-		return await self.cursor.fetchone()
+		return await self.cursor.fetchone() #type: ignore
 	
 	async def load_all_user_reminders(self, user: int) -> list[tuple[int]]:
 		await self.cursor.execute("""
 		SELECT id FROM usuarios
 		WHERE user = ? ORDER BY timestamp
 		""",(user,))
-		return await self.cursor.fetchall()
+		return await self.cursor.fetchall() #type: ignore
 
 	async def load_timestamp(self,actual_time: int) -> list[tuple]:
 		await self.cursor.execute("""
@@ -79,13 +79,13 @@ class Reader:
 		WHERE timestamp - ? < 12
 		ORDER BY timestamp ASC
 		""",(actual_time,))
-		return await self.cursor.fetchall()
+		return await self.cursor.fetchall() #type: ignore
 	
 	async def load_everything(self) -> list[tuple]:
 		await self.cursor.execute("""
 		SELECT * FROM usuarios
 		""")
-		return await self.cursor.fetchall()
+		return await self.cursor.fetchall() #type: ignore
 
 async def add_remind(user: int,channel_id: int | None,reason: str, days: int, hours: int, minutes: int) -> dict[str,int]:
 	if channel_id is None:

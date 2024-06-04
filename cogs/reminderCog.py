@@ -4,6 +4,7 @@ from discord.ext import commands,tasks
 import asyncio
 from utils import remind
 from time import time
+from ast import literal_eval
 
 class RemindCog(commands.GroupCog,name='reminder'):
 	def __init__(self, bot: commands.Bot):
@@ -39,6 +40,7 @@ class RemindCog(commands.GroupCog,name='reminder'):
 				print(f"something wrong happened, channel_id: {interaction.channel_id}")
 			await interaction.response.edit_message(content=None,embed=embed,view=self.view_)
 	class SnoozeView(discord.ui.View):
+		message: discord.Message
 		def __init__(self,timeout: float):
 			super().__init__(timeout=timeout)
 		async def on_timeout(self):
@@ -85,12 +87,12 @@ class RemindCog(commands.GroupCog,name='reminder'):
 		)
 		try:
 			channel = await self.bot.fetch_channel(item[3])
-			view.message = await channel.send(f'<@{item[0]}>',embed=embed,view=view)
+			view.message = await channel.send(f'<@{item[0]}>',embed=embed,view=view) #type: ignore
 		except (discord.Forbidden,discord.HTTPException):
 			try:
 				user = await self.bot.fetch_user(item[0])
 				dm_channel = await user.create_dm()
-				view.message = await dm_channel.send(f'<@{item[0]}>',embed=embed,view=view)
+				view.message = await dm_channel.send(f'<@{item[0]}>',embed=embed,view=view) #type: ignore
 				await dm_channel.send('_Sending the reminder in your desired channel failed. So I instead reminded you here_')
 			except (discord.HTTPException,discord.NotFound,discord.Forbidden):
 				print(f"Couldn't send reminder to user {item[0]}")
@@ -181,8 +183,8 @@ class RemindCog(commands.GroupCog,name='reminder'):
 			# print(e,type(e),eval(str(e)))
 			embed.title = "No reminder found"
 			embed.description = f'No reminder of id **{id}** found.\nYour reminders: '
-			for item in eval(str(e)):
-				embed.description += f'**{item[0]}** '
+			for item in literal_eval(str(e)):
+				embed.description += f'**{item[0]}** ' #type: ignore
 			embed.colour = discord.Colour.red()
 		await interaction.response.send_message(embed=embed)
 

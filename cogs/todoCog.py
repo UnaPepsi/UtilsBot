@@ -6,8 +6,27 @@ from discord.ext import commands
 from utils.todo import TodoDB, NoTodoFound, BadTodo
 from time import time
 
+async def autocomplete_todo(interaction: discord.Interaction, current: str) -> list[app_commands.Choice[int]]:
+	async with TodoDB() as todo:
+		if current == '':
+			tasks_ids = await todo.load_all_user_todos_id(user=interaction.user.id,limit=25)
+			if tasks_ids is None:
+				return []
+			choices_list = []
+			for task_id in tasks_ids:
+				task_info = await todo.load_todo(user=interaction.user.id,id=task_id)
+				choices_list.append(app_commands.Choice(name=f"{task_id}. {task_info.reason if len(task_info.reason) <= 30 else task_info.reason[:-1]+'...'}",value=task_id))
+			return choices_list
+		else:
+			try:
+				task_info = await todo.load_todo(user=interaction.user.id,id=int(current))
+				return [app_commands.Choice(name=f"{current}. {task_info.reason if len(task_info.reason) <= 30 else task_info.reason[:-3]+'...'}",value=int(current))]
+			except (ValueError,NoTodoFound):
+				return []
+
 class TodoPaginator(ui.View):
 	index = 0
+	message: discord.Message | None = None
 	def __init__(self, pages: list[int], user_view: int,timeout: int | None = 180):
 		super().__init__(timeout=timeout)
 		self.pages = pages
@@ -15,7 +34,8 @@ class TodoPaginator(ui.View):
 		self.edit_children()
 
 	async def on_timeout(self):
-		await self.message.edit(view=None)
+		if self.message is not None:
+			await self.message.edit(view=None)
 
 	async def check_todo(self, *, interaction: discord.Interaction, user: int, id: int):
 		if interaction.user.id != self.user_view:
@@ -23,7 +43,9 @@ class TodoPaginator(ui.View):
 			return
 		async with TodoDB() as todo:
 			try:
-				self.pages = await todo.load_all_user_todos_id(user=user)
+				self.pages = await todo.load_all_user_todos_id(user=user) or [] #make type checker happy
+				if not self.pages:
+					raise NoTodoFound()
 				t = await todo.load_todo(user=user,id=id)
 			except NoTodoFound:
 				await interaction.response.edit_message(content='Something wrong happened :(',embed=None,view=None)
@@ -45,17 +67,17 @@ class TodoPaginator(ui.View):
 		self.go_last.disabled = self.pages[-1] == self.pages[self.index]
 
 	@ui.button(label='<<',style=discord.ButtonStyle.primary)
-	async def go_first(self, interaction: discord.Interaction, button: discord.Button):
+	async def go_first(self, interaction: discord.Interaction, button: discord.ui.Button):
 		self.index = 0
 		await self.check_todo(interaction=interaction,user=interaction.user.id,id=self.pages[self.index])
 	
 	@ui.button(label='<',style=discord.ButtonStyle.secondary)
-	async def go_back(self, interaction: discord.Interaction, button: discord.Button):
+	async def go_back(self, interaction: discord.Interaction, button: discord.ui.Button):
 		self.index -= 1
 		await self.check_todo(interaction=interaction,user=interaction.user.id,id=self.pages[self.index])
 	
 	@ui.button(emoji='\N{WASTEBASKET}',style=discord.ButtonStyle.red)
-	async def remove_todo(self, interaction: discord.Interaction, button: discord.Button):
+	async def remove_todo(self, interaction: discord.Interaction, button: discord.ui.Button):
 		if interaction.user.id != self.user_view:
 			await interaction.response.send_message(f'<@{self.user_view}> ran this command so only them can interact with it',ephemeral=True)
 			return
@@ -75,12 +97,12 @@ class TodoPaginator(ui.View):
 		await interaction.response.edit_message(embed=embed,view=None)
 
 	@ui.button(label='>',style=discord.ButtonStyle.secondary)
-	async def go_forward(self, interaction: discord.Interaction, button: discord.Button):
+	async def go_forward(self, interaction: discord.Interaction, button: discord.ui.Button):
 		self.index += 1
 		await self.check_todo(interaction=interaction,user=interaction.user.id,id=self.pages[self.index])
 	
 	@ui.button(label='>>',style=discord.ButtonStyle.primary)
-	async def go_last(self, interaction: discord.Interaction, button: discord.Button):
+	async def go_last(self, interaction: discord.Interaction, button: discord.ui.Button):
 		self.index = len(self.pages)-1
 		await self.check_todo(interaction=interaction,user=interaction.user.id,id=self.pages[self.index])
 	
@@ -91,7 +113,7 @@ class TodoRemoveButton(ui.Button):
 		self.user_button = user_button
 	async def callback(self, interaction: discord.Interaction):
 		if interaction.user.id != self.user_button:
-			await interaction.response.send_message(f'<@{self.user_view}> ran this command so only them can interact with it',ephemeral=True)
+			await interaction.response.send_message(f'<@{self.user_button}> ran this command so only them can interact with it',ephemeral=True)
 			return
 		embed = discord.Embed()
 		async with TodoDB() as todo:
@@ -146,6 +168,7 @@ class TODOCog(commands.GroupCog,name='task'):
 		else: raise error
 
 	@app_commands.command(name='solve')
+	@app_commands.autocomplete(id=autocomplete_todo)
 	async def todo_solve(self, interaction: discord.Interaction, id: int):
 		"""Marks as solved a TODO task (removes a task)
 
@@ -166,6 +189,7 @@ class TODOCog(commands.GroupCog,name='task'):
 		await interaction.response.send_message(embed=embed)
 
 	@app_commands.command(name='check')
+	@app_commands.autocomplete(id=autocomplete_todo)
 	async def todo_check(self, interaction: discord.Interaction, id: int):
 		"""Checks a saved TODO task
 
@@ -184,14 +208,15 @@ class TODOCog(commands.GroupCog,name='task'):
 				embed.timestamp = datetime.fromtimestamp(t.timestamp)
 				view = ui.View(timeout=360)
 				view.add_item(TodoRemoveButton(id,interaction.user.id))
-				view.on_timeout = lambda : view.message.edit(view=None)
+				view.on_timeout = lambda : view.message.edit(view=None) #type: ignore
 			except NoTodoFound as e:
 				embed.title = 'No task found'
 				embed.description = str(e)
 				embed.colour = discord.Colour.red()
 				view = discord.utils.MISSING
 		await interaction.response.send_message(embed=embed,view=view)
-		view.message = await interaction.original_response()
+		if hasattr(view,'message'):
+			view.message = await interaction.original_response() #type: ignore
 
 	@app_commands.command(name='list')
 	async def todo_list(self, interaction: discord.Interaction):
