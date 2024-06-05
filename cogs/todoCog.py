@@ -215,7 +215,7 @@ class TODOCog(commands.GroupCog,name='task'):
 				embed.colour = discord.Colour.red()
 				view = discord.utils.MISSING
 		await interaction.response.send_message(embed=embed,view=view)
-		if hasattr(view,'message'):
+		if isinstance(view,ui.View):
 			view.message = await interaction.original_response() #type: ignore
 
 	@app_commands.command(name='list')
@@ -241,7 +241,8 @@ class TODOCog(commands.GroupCog,name='task'):
 				embed.colour = discord.Colour.red()
 				view = discord.utils.MISSING
 		await interaction.response.send_message(embed=embed,view=view)
-		view.message = await interaction.original_response()
+		if isinstance(view,TodoPaginator):
+			view.message = await interaction.original_response()
 
 async def setup(bot: commands.Bot):
 	await bot.add_cog(TODOCog(bot))

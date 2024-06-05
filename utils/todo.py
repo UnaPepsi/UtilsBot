@@ -111,7 +111,7 @@ class TodoDB:
 		results = await self.cursor.fetchone()
 		if results is None:
 			if (user_todo_ids := await self.load_all_user_todos_id(user=user)) is not None:
-				raise NoTodoFound(f'No task of ID **{id}** found.\n<@{user}> tasks: {" ".join(map(format_numbers,user_todo_ids))}')
+				raise NoTodoFound(f'No task of ID **{id}** found.\n<@{user}> tasks: {" ".join(map(lambda x: f"{x}",user_todo_ids))}')
 			else:
 				raise NoTodoFound('You have no tasks saved')
 		return Todo(*results)
@@ -141,6 +141,3 @@ class TodoDB:
 		""",(user,))
 		result = await self.cursor.fetchone()
 		return result[0] if result is not None else 0
-
-def format_numbers(number: int) -> str:
-	return f'`{number}`'
