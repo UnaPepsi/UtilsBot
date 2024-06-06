@@ -11,9 +11,13 @@ class RandomCog(commands.Cog):
 		self.bot = bot
 	
 	@app_commands.checks.cooldown(2,5,key=lambda i: i.user.id)
-	@app_commands.command(name='bypassurl',description='Tries to unshorten a URL')
-	@app_commands.describe(url='The URL to unshorten')
+	@app_commands.command(name='bypassurl')
 	async def bypassurl(self, interaction: discord.Interaction, url: str):
+		"""Tries to unshorten a URL
+
+		Args:
+			url (str): The URL to unshorten
+		"""
 		try:
 			await interaction.response.send_message(await bypass(url=url))
 		except KeyError:
@@ -21,9 +25,13 @@ class RandomCog(commands.Cog):
 		except ValueError:
 			await interaction.response.send_message('Invalid URL')
 
-	@app_commands.describe(user='The user to check')
-	@app_commands.command(name='pfp',description="Shows someone's profile picture")
+	@app_commands.command(name='pfp')
 	async def pfp(self, interaction: discord.Interaction, user: discord.User):
+		"""Shows someone's profile picture
+
+		Args:
+			user (discord.User): The user to check
+		"""
 		embed = discord.Embed(
 			title = f"{user.display_name}'s profile picture",
 			colour=discord.Colour.random())
@@ -31,9 +39,13 @@ class RandomCog(commands.Cog):
 		await interaction.response.send_message(embed=embed)
 
 	@app_commands.checks.cooldown(2,5,key=lambda i: i.user.id)
-	@app_commands.command(name='suggestion',description="Gives a suggestion to the bot's author :)")
-	@app_commands.describe(suggestion='The suggestion to give')
+	@app_commands.command(name='suggestion')
 	async def suggest(self, interaction: discord.Interaction, suggestion: str):
+		"""Gives a suggestion to the bot's author :)
+
+		Args:
+			suggestion (str): The suggestion to give
+		"""
 		if len(suggestion) > 4000:
 			await interaction.response.send_message("A suggestion can't be larger than 4000 characters :<")
 			return
@@ -47,10 +59,14 @@ class RandomCog(commands.Cog):
 		await interaction.response.send_message('Suggestion sent. Thank you :D',ephemeral=True)
 	
 	@app_commands.checks.cooldown(2,12,key=lambda i: i.user.id)
-	@app_commands.command(name='screenshot',description='Takes a screenshot of a given website')
-	@app_commands.describe(link='The URL of the desired website screenshot')
+	@app_commands.command(name='screenshot')
 	@app_commands.guild_only()
 	async def screenshot(self, interaction: discord.Interaction, link: str):
+		"""Takes a screenshot of a given website
+
+		Args:
+			link (str): The URL of the desired website screenshot
+		"""
 		if interaction.channel is None: return
 		if isinstance(interaction.channel,(discord.DMChannel,discord.GroupChannel)) or not interaction.channel.is_nsfw():
 			await interaction.response.send_message('This command is only available for channels with NSFW enabled')

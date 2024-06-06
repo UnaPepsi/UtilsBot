@@ -26,7 +26,7 @@ async def autocomplete_todo(interaction: discord.Interaction, current: str) -> l
 
 class TodoPaginator(ui.View):
 	index = 0
-	message: discord.Message | None = None
+	message: discord.InteractionMessage | None = None
 	def __init__(self, pages: list[int], user_view: int,timeout: int | None = 180):
 		super().__init__(timeout=timeout)
 		self.pages = pages
@@ -67,17 +67,17 @@ class TodoPaginator(ui.View):
 		self.go_last.disabled = self.pages[-1] == self.pages[self.index]
 
 	@ui.button(label='<<',style=discord.ButtonStyle.primary)
-	async def go_first(self, interaction: discord.Interaction, button: discord.ui.Button):
+	async def go_first(self, interaction: discord.Interaction, button: ui.Button):
 		self.index = 0
 		await self.check_todo(interaction=interaction,user=interaction.user.id,id=self.pages[self.index])
 	
 	@ui.button(label='<',style=discord.ButtonStyle.secondary)
-	async def go_back(self, interaction: discord.Interaction, button: discord.ui.Button):
+	async def go_back(self, interaction: discord.Interaction, button: ui.Button):
 		self.index -= 1
 		await self.check_todo(interaction=interaction,user=interaction.user.id,id=self.pages[self.index])
 	
 	@ui.button(emoji='\N{WASTEBASKET}',style=discord.ButtonStyle.red)
-	async def remove_todo(self, interaction: discord.Interaction, button: discord.ui.Button):
+	async def remove_todo(self, interaction: discord.Interaction, button: ui.Button):
 		if interaction.user.id != self.user_view:
 			await interaction.response.send_message(f'<@{self.user_view}> ran this command so only them can interact with it',ephemeral=True)
 			return
@@ -97,12 +97,12 @@ class TodoPaginator(ui.View):
 		await interaction.response.edit_message(embed=embed,view=None)
 
 	@ui.button(label='>',style=discord.ButtonStyle.secondary)
-	async def go_forward(self, interaction: discord.Interaction, button: discord.ui.Button):
+	async def go_forward(self, interaction: discord.Interaction, button: ui.Button):
 		self.index += 1
 		await self.check_todo(interaction=interaction,user=interaction.user.id,id=self.pages[self.index])
 	
 	@ui.button(label='>>',style=discord.ButtonStyle.primary)
-	async def go_last(self, interaction: discord.Interaction, button: discord.ui.Button):
+	async def go_last(self, interaction: discord.Interaction, button: ui.Button):
 		self.index = len(self.pages)-1
 		await self.check_todo(interaction=interaction,user=interaction.user.id,id=self.pages[self.index])
 	

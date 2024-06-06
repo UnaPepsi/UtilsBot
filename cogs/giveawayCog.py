@@ -225,7 +225,10 @@ class GiveawayCog(commands.GroupCog,name='giveaway'):
 		async with GiveawayDB() as gw:
 			await gw.make_table()
 			print('table2')
-		self.loop_check.start()
+		try:
+			self.loop_check.start()
+		except RuntimeError:
+			print('task already running')
 
 	@commands.Cog.listener()
 	async def on_raw_message_delete(self, payload: discord.RawMessageDeleteEvent):
@@ -303,9 +306,13 @@ class GiveawayCog(commands.GroupCog,name='giveaway'):
 		else:
 			raise error
 
-	@app_commands.describe(id='The message ID of the giveaway')
-	@app_commands.command(name='remove',description='Removes an owned giveaway')
+	@app_commands.command(name='remove')
 	async def remove_giveaway(self, interaction: discord.Interaction, id: str):
+		"""Removed an owned giveaway
+
+		Args:
+			id (str): The message ID of the giveaway
+		"""
 		try: int(id)
 		except ValueError: await interaction.response.send_message('Must be a valid Discord ID');return
 		async with GiveawayDB() as gw:

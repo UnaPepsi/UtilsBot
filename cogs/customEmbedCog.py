@@ -363,9 +363,13 @@ class CECog(commands.GroupCog,name='embed'):
 		embed.add_field(name='Size',value='Embeds can have up to `6000 total characters`')
 		await interaction.response.send_message(embed=embed,view=EmbedMaker(interaction.user))
 	
-	@app_commands.describe(tag='The saved tag of your saved embed to remove')
-	@app_commands.command(name='remove',description='Removes a previously saved embed')
+	@app_commands.command(name='remove')
 	async def delete_embed(self, interaction: discord.Interaction, tag: str):
+		"""Removes a previously saved embed
+		
+		Args:
+			tag (int): The saved tag of your saved embed to remove
+		"""
 		async with CustomEmbed() as ce:
 			try:
 				await ce.delete_embed(user=interaction.user.id,tag=tag)
@@ -374,9 +378,14 @@ class CECog(commands.GroupCog,name='embed'):
 				await interaction.response.send_message(f'No embed with tag {tag} found',ephemeral=True)
 	
 	@app_commands.checks.has_permissions(manage_messages=True)
-	@app_commands.describe(tag='The tag of your saved embed',public='Wheter the embed should stick to your command interaction')
-	@app_commands.command(name='send',description='Sends a saved embed!')
+	@app_commands.command(name='send')
 	async def send_embed(self, interaction: discord.Interaction, tag: str, public: bool):
+		"""Sends a saved embed!
+
+		Args:
+			tag (str): The tag of your saved embed
+			public (bool): Wheter the embed should stick to your command interaction
+		"""
 		if interaction.channel is None or isinstance(interaction.channel,(discord.ForumChannel,discord.CategoryChannel)):
 			await interaction.response.send_message('Something wrong happened',ephemeral=True)
 			return
