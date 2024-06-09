@@ -10,6 +10,8 @@ from datetime import datetime
 import asyncio
 from random import randint
 from utils.userVoted import has_user_voted
+import logging
+logger = logging.getLogger(__name__)
 
 def parse_duration(duration_str: str):
 	pattern = r"""
@@ -65,7 +67,7 @@ class GiveawayJoinDynamicButton(ui.DynamicItem[ui.Button],template=r'giveaway_jo
 					return
 			except AssertionError as e:
 				await interaction.response.send_message('Something wrong happened :(',ephemeral=True)
-				print(e)
+				logger.warning(e)
 				return
 			async with GiveawayDB() as gw:
 				participants = len(await gw.fetch_participants(giveaway_id=interaction.message.id))
@@ -102,7 +104,7 @@ class GiveawayLeaveButton(ui.Button):
 				await gw.remove_user(user=interaction.user.id,giveaway_id=self.giveaway_id)
 			except AssertionError as e:
 				await interaction.response.send_message('Hmm... something went wrong...',ephemeral=True)
-				print(e)
+				logger.debug(e)
 				return
 			try: participants = len(await gw.fetch_participants(giveaway_id=self.giveaway_id))
 			except AssertionError: participants = 0
@@ -210,6 +212,9 @@ class GiveawayCog(commands.GroupCog,name='giveaway'):
 	
 	@tasks.loop(seconds=10)
 	async def loop_check(self):
+		if not self.bot.is_ready():
+			await self.bot.wait_until_ready()
+			return
 		try:
 			async with GiveawayDB() as gw:
 				items: list[tuple[int,int,int,str,int,int]] = await gw.check_timestamp_fire(time=int(time()))
@@ -220,15 +225,11 @@ class GiveawayCog(commands.GroupCog,name='giveaway'):
 			task_list.append(asyncio.create_task(self.send_giveaways(item)))
 		await asyncio.gather(*task_list)
 
-	@commands.Cog.listener()
-	async def on_ready(self):
+	async def cog_load(self):
 		async with GiveawayDB() as gw:
 			await gw.make_table()
-			print('table2')
-		try:
-			self.loop_check.start()
-		except RuntimeError:
-			print('task already running')
+			logger.info('Giveaway table created')
+		self.loop_check.start()
 
 	@commands.Cog.listener()
 	async def on_raw_message_delete(self, payload: discord.RawMessageDeleteEvent):
@@ -238,7 +239,7 @@ class GiveawayCog(commands.GroupCog,name='giveaway'):
 			except AssertionError:
 				return
 			await gw.delete_giveaway(giveaway_id=payload.message_id)
-			print(f'giveaway {payload.message_id} deleted')
+			logger.debug(f'giveaway {payload.message_id} deleted')
 
 	async def send_giveaways(self, item: tuple[int,int,int,str,int,int]):
 		async def delgiveaway():
@@ -249,7 +250,7 @@ class GiveawayCog(commands.GroupCog,name='giveaway'):
 				return
 		await asyncio.sleep(item[2]-int(time()))
 		try:
-			print("embed")
+			logger.debug(f'Checking giveaway {item[0]}')
 			channel = await self.bot.fetch_channel(item[1])
 			msg: discord.Message = await channel.fetch_message(item[0]) #type: ignore
 			embed = msg.embeds[0]
@@ -283,7 +284,7 @@ class GiveawayCog(commands.GroupCog,name='giveaway'):
 						rand = randint(0,len(winners_id)-1)
 						winners += f'<@{winners_id.pop(rand)[0]}> '
 					else:
-						print("empty")
+						logger.debug("No more winners")
 						winners += f'<@{winners_id.pop(0)[0]}> '
 				await msg.reply(f"The giveaway for `{prize}` has ended! Winners: {winners}")
 				await msg.edit(embed=embed,view=None)

@@ -5,11 +5,17 @@ from utils.bypassUrl import bypass
 from utils.websiteSS import get_ss, BadURL, BadResponse
 from typing import Literal
 import os
+import logging
+logger = logging.getLogger(__name__)
 
 class RandomCog(commands.Cog):
 	def __init__(self, bot: commands.Bot):
 		self.bot = bot
 	
+	@commands.Cog.listener()
+	async def on_ready(self):
+		logger.info(f'Logged in as {self.bot.user}. Bot in {len(self.bot.guilds)} guilds')
+
 	@app_commands.checks.cooldown(2,5,key=lambda i: i.user.id)
 	@app_commands.command(name='bypassurl')
 	async def bypassurl(self, interaction: discord.Interaction, url: str):
@@ -95,7 +101,7 @@ class RandomCog(commands.Cog):
 	@commands.is_owner()
 	async def reload_cog(self, ctx: commands.Context, cog: Literal['giveawayCog','randomCog','reminderCog','customEmbedCog','todoCog','all']):
 		if ctx.author.id != 624277615951216643: #useless but just incase
-			print(ctx.author.id)
+			logger.warning(f'{ctx.author.id} somehow got here')
 			return
 		async def reload_cog(cog: str) -> None:
 			try:
@@ -115,7 +121,6 @@ class RandomCog(commands.Cog):
 			await ctx.send('bad argument')
 			return
 		if isinstance(error,commands.NotOwner):
-			print('no')
 			return
 		raise error
 		
@@ -123,7 +128,7 @@ class RandomCog(commands.Cog):
 	@commands.is_owner()
 	async def git_cmd(self, ctx:commands.Context, *, command: str):
 		if ctx.author.id != 624277615951216643:
-			print('nel')
+			logger.warning(f'{ctx.author.id} somehow got here')
 			return
 		code = os.popen(f'git {command}').read()
 		await ctx.send(code)
@@ -131,7 +136,6 @@ class RandomCog(commands.Cog):
 	@git_cmd.error
 	async def git_bad_command(self, ctx: commands.Context, error: commands.CommandError):
 		if isinstance(error,commands.NotOwner):
-			print('no')
 			return
 		raise error
 		

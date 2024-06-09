@@ -111,7 +111,7 @@ class Reader:
 		await self.cursor.execute("""
 		SELECT * FROM usuarios
 		WHERE user = ? AND reason LIKE ? LIMIT ?
-		""",(user,reason+'%',limit))
+		""",(user,'%'+reason+'%',limit))
 		results = await self.cursor.fetchall()
 		return results if results != [] else None #type: ignore
 

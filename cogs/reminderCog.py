@@ -5,6 +5,8 @@ import asyncio
 from utils import remind
 from time import time
 from ast import literal_eval
+import logging
+logger = logging.getLogger(__name__)
 
 async def reminder_autocomplete(interaction: discord.Interaction, current: str):
 	async with remind.Reader() as rd:
@@ -15,7 +17,7 @@ async def reminder_autocomplete(interaction: discord.Interaction, current: str):
 			choices_list = []
 			for rem in reminders:
 				rem_info = await remind.check_remind(user=interaction.user.id,id=rem[4])
-				choices_list.append(app_commands.Choice(name=f"{rem[4]}. {rem_info.reason if len(rem_info.reason) <= 30 else rem_info.reason[:-1]+'...'}",value=rem[4]))
+				choices_list.append(app_commands.Choice(name=f"{rem[4]}. {rem_info.reason if len(rem_info.reason) <= 30 else rem_info.reason[:-3]+'...'}",value=rem[4]))
 			return choices_list
 		else:		
 			try:
@@ -135,7 +137,7 @@ class Snooze(ui.Button):
 				embed.description = str(e)
 				embed.colour = discord.Colour.red()
 			except TypeError:
-				print(f"something wrong happened, channel_id: {interaction.channel_id}")
+				logger.error(f"something wrong happened, channel_id: {interaction.channel_id}")
 			await interaction.response.edit_message(content=None,embed=embed,view=self.view_)
 
 class SnoozeView(ui.View):
@@ -173,22 +175,17 @@ class RemindCog(commands.GroupCog,name='reminder'):
 	def __init__(self, bot: commands.Bot):
 		self.bot = bot
 
-	@commands.Cog.listener()
-	async def on_ready(self):
-		print(f"{self.bot.user} currently in {len(self.bot.guilds)} servers:")
-		for guild in self.bot.guilds:
-			print(f"{guild.name} ({guild.member_count:,} members) ({guild.id} {guild.owner_id})")
+	async def cog_load(self):
 		async with remind.Reader() as f:
 			await f.make_table()
-			print('table')
-		try:
-			self.loop_check.start()
-		except RuntimeError:
-			print('task already running. most likely because on_ready got called again')
-
+			logger.info('Reminder table created')
+		self.loop_check.start()
 	
 	@tasks.loop(seconds=10)
 	async def loop_check(self):
+		if not self.bot.is_ready():
+			await self.bot.wait_until_ready()
+			return
 		try:
 			items = await remind.check_remind_fire()
 		except remind.BadReminder:
@@ -219,7 +216,7 @@ class RemindCog(commands.GroupCog,name='reminder'):
 				view.message = await dm_channel.send(f'<@{item.user}>',embed=embed,view=view) #type: ignore
 				await dm_channel.send('_Sending the reminder in your desired channel failed. So I instead reminded you here_')
 			except (discord.HTTPException,discord.NotFound,discord.Forbidden):
-				print(f"Couldn't send reminder to user {item.user}")
+				logger.warning(f"Couldn't send reminder to user {item.user}")
 
 	@commands.command()
 	async def botsync(self, ctx: commands.Context):

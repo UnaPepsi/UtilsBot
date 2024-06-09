@@ -5,6 +5,8 @@ from datetime import datetime
 from discord.ext import commands
 from utils.todo import TodoDB, NoTodoFound, BadTodo
 from time import time
+import logging
+logger = logging.getLogger(__name__)
 
 async def autocomplete_todo(interaction: discord.Interaction, current: str) -> list[app_commands.Choice[int]]:
 	async with TodoDB() as todo:
@@ -15,14 +17,18 @@ async def autocomplete_todo(interaction: discord.Interaction, current: str) -> l
 			choices_list = []
 			for task_id in tasks_ids:
 				task_info = await todo.load_todo(user=interaction.user.id,id=task_id)
-				choices_list.append(app_commands.Choice(name=f"{task_id}. {task_info.reason if len(task_info.reason) <= 30 else task_info.reason[:-1]+'...'}",value=task_id))
+				choices_list.append(app_commands.Choice(name=f"{task_id}. {task_info.reason if len(task_info.reason) <= 30 else task_info.reason[:-3]+'...'}",value=task_id))
 			return choices_list
 		else:
 			try:
 				task_info = await todo.load_todo(user=interaction.user.id,id=int(current))
 				return [app_commands.Choice(name=f"{current}. {task_info.reason if len(task_info.reason) <= 30 else task_info.reason[:-3]+'...'}",value=int(current))]
-			except (ValueError,NoTodoFound):
+			except NoTodoFound:
 				return []
+			except ValueError:
+				tasks_todo = await todo.load_autocomplete(user=interaction.user.id,reason=current,limit=25)
+				if tasks_todo is None: return []
+				return [app_commands.Choice(name=f"{task.id}. {task.reason if len(task.reason) <= 30 else task.reason[:-3]+'...'}",value=task.id) for task in tasks_todo]
 
 class TodoPaginator(ui.View):
 	index = 0
@@ -132,11 +138,10 @@ class TODOCog(commands.GroupCog,name='task'):
 	def __init__(self, bot: commands.Bot):
 		self.bot = bot
 
-	@commands.Cog.listener()
-	async def on_ready(self):
+	async def cog_load(self):
 		async with TodoDB() as todo:
 			await todo.make_table()
-		print('table3')
+		logger.info('TODO table created')
 
 	@app_commands.checks.cooldown(2,7,key=lambda i: i.user.id)
 	@app_commands.command(name='add')

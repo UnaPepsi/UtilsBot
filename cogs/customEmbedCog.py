@@ -9,6 +9,8 @@ from utils.customEmbed import CustomEmbed, BadTag, TagInUse, TooManyEmbeds
 from utils import perms
 import time
 from ast import literal_eval
+import logging
+logger = logging.getLogger(__name__)
 
 default_embed = discord.Embed(
 	title='This is the title',
@@ -336,32 +338,15 @@ class CECog(commands.GroupCog,name='embed'):
 	def __init__(self, bot: commands.Bot):
 		self.bot = bot
 
-	@commands.Cog.listener()
-	async def on_ready(self):
+	async def cog_load(self):
 		async with CustomEmbed() as ce:
 			await ce.make_table()
+		logger.info('CustomEmbed table created')
 
 	@app_commands.command(name='create',description='Creates a custom embed!')
 	@app_commands.checks.has_permissions(manage_messages=True)
 	async def create_embed(self, interaction: discord.Interaction):
-		embed = discord.Embed(
-			title='This is the title',
-			description='This is the description, every field supports markdown, such as `this`, **this**, ~~this~~ ```python\n print("And many others")```'+
-			'\nDescription can have a maximum of 4000 characters (technically 4096)',
-			colour=discord.Colour.green(),
-			url='https://discord.com/vanityurl/dotcom/steakpants/flour/flower/index11.html',
-			timestamp=datetime.now(),
-		)
-		embed.set_author(name="I'm the author",icon_url='https://i.imgur.com/UMQCyXX.gif',url='https://discord.com/vanityurl/dotcom/steakpants/flour/flower/index11.html')
-		embed.set_image(url='https://i.imgur.com/hrDkWqw.gif')
-		embed.set_thumbnail(url='https://i.imgur.com/HKG9dl8.gif')
-		embed.set_footer(text="I'm the footer! Next to me is the timestamp",icon_url='https://i.imgur.com/bxaPyZD.jpeg')
-		embed.add_field(name='Image',value='The big `GIF` is the `Image` field')
-		embed.add_field(name='Thumbnail',value='The small `GIF` is the `Thumbnail`')
-		embed.add_field(name='Inline',value='You can have up to `3 fields` in the `same line`!')
-		embed.add_field(name='Fields',value='You can have up to `25 fields` in total!')
-		embed.add_field(name='Size',value='Embeds can have up to `6000 total characters`')
-		await interaction.response.send_message(embed=embed,view=EmbedMaker(interaction.user))
+		await interaction.response.send_message(embed=default_embed,view=EmbedMaker(interaction.user))
 	
 	@app_commands.command(name='remove')
 	async def delete_embed(self, interaction: discord.Interaction, tag: str):

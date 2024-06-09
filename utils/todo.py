@@ -131,6 +131,21 @@ class TodoDB:
 		results = await self.cursor.fetchall()
 		return [result[0] for result in results] if results != [] else None
 
+	async def load_autocomplete(self,*, user: int, reason: str, limit: int = -1) -> Optional[list[Todo]]:
+		"""
+		Returns a list of the TODOs that have a reason LIKE the given reason
+
+		user `int`: The user ID
+		reason `str`: The reason of the TODO creation
+		limit `int`: The lookup limit
+		"""
+		await self.cursor.execute("""
+		SELECT * FROM todos
+		WHERE user = ? AND reason LIKE ? LIMIT ?
+		""",(user,'%'+reason+'%',limit))
+		results = await self.cursor.fetchall()
+		return [Todo(*result) for result in results] if results != [] else None
+
 	async def load_todo_amounts(self,*, user: int) -> int:
 		"""
 		Returns the amount of Todos a user has
