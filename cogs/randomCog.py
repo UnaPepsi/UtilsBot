@@ -24,12 +24,13 @@ class RandomCog(commands.Cog):
 		Args:
 			url (str): The URL to unshorten
 		"""
+		await interaction.response.defer()
 		try:
-			await interaction.response.send_message(await bypass(url=url))
+			await interaction.followup.send(await bypass(url=url))
 		except KeyError:
-			await interaction.response.send_message('Could not unshorten that link')
+			await interaction.followup.send('Could not unshorten that link')
 		except ValueError:
-			await interaction.response.send_message('Invalid URL')
+			await interaction.followup.send('Invalid URL')
 
 	@app_commands.command(name='pfp')
 	async def pfp(self, interaction: discord.Interaction, user: discord.User):
@@ -66,7 +67,7 @@ class RandomCog(commands.Cog):
 	
 	@app_commands.checks.cooldown(2,12,key=lambda i: i.user.id)
 	@app_commands.command(name='screenshot')
-	@app_commands.guild_only()
+	@app_commands.choices()
 	async def screenshot(self, interaction: discord.Interaction, link: str):
 		"""Takes a screenshot of a given website
 
@@ -81,7 +82,7 @@ class RandomCog(commands.Cog):
 		try:
 			fbytes = await get_ss(link=link)
 		except BadURL:
-			await interaction.followup.send('Must be a valid link')
+			await interaction.followup.send('Must be a valid link. Valid link example: `http(s)://example.com`')
 		except BadResponse:
 			await interaction.followup.send('An error happened :(')
 		else:

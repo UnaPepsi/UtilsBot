@@ -1,7 +1,8 @@
 from aiohttp import ClientSession
 import re
+from utils.sm_utils import caching
 
-
+@caching
 async def bypass(url: str) -> str:
 	valid_url = re.compile(r'http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*(),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+')
 	if not valid_url.match(url):

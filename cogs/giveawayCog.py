@@ -4,7 +4,7 @@ from discord import app_commands, ui
 from datetime import timedelta
 import re
 from utils.giveaway import GiveawayDB
-from utils import perms
+from utils import sm_utils
 from time import time
 from datetime import datetime
 import asyncio
@@ -302,7 +302,7 @@ class GiveawayCog(commands.GroupCog,name='giveaway'):
 	@create_giveaway.error
 	async def create_giveaway_error(self, interaction: discord.Interaction, error: app_commands.AppCommandError):
 		if isinstance(error,app_commands.MissingPermissions):
-			missing_perms = perms.format_miss_perms(error.missing_permissions)
+			missing_perms = sm_utils.format_miss_perms(error.missing_permissions)
 			await interaction.response.send_message(f"You need `{missing_perms}` to do this",ephemeral=True)
 		else:
 			raise error

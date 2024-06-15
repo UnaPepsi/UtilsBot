@@ -4,9 +4,9 @@ from discord.ext import commands
 import re
 from datetime import datetime
 from typing import Union, Optional, Any
-from utils.colors import def_colors, rgb_to_hex
+from utils.colors import hex_colors, rgb_to_hex
 from utils.customEmbed import CustomEmbed, BadTag, TagInUse, TooManyEmbeds
-from utils import perms
+from utils import sm_utils
 import time
 from ast import literal_eval
 import logging
@@ -296,9 +296,8 @@ class EmbedPrompt(discord.ui.Modal,title='Edit the embed!'):
 			await interaction.response.send_message("Invalid embed!",ephemeral=True)
 			return
 		valid_url = re.compile(r'http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*(),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+')
-		colors = def_colors()
 		if not self.color_.value.isdigit():
-			try:  color_sel = colors[self.color_.value] if self.color_.value in list(colors) else int(self.color_.value[1:],16)
+			try:  color_sel = hex_colors[self.color_.value] if self.color_.value in list(hex_colors) else int(self.color_.value[1:],16)
 			except ValueError: color_sel = None
 			try: color_sel = rgb_to_hex(*self.color_.value.split(',',3))
 			except TypeError: ...
@@ -401,7 +400,7 @@ class CECog(commands.GroupCog,name='embed'):
 
 	async def cog_app_command_error(self, interaction: discord.Interaction, error: app_commands.AppCommandError):
 		if isinstance(error,discord.app_commands.MissingPermissions):
-			missing_perms = perms.format_miss_perms(error.missing_permissions)
+			missing_perms = sm_utils.format_miss_perms(error.missing_permissions)
 			await interaction.response.send_message(f"You need `{missing_perms}` to do this",ephemeral=True)
 		else:
 			raise error
