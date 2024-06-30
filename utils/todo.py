@@ -1,5 +1,5 @@
 import aiosqlite
-from typing import Optional, Self
+from typing import Optional, Self, List
 from utils.userVoted import has_user_voted
 
 class NoTodoFound(Exception): ...
@@ -22,7 +22,7 @@ class TodoDB:
 		self.cursor = await self.connection.cursor()
 		return self
 
-	async def __aexit__(self, *args):
+	async def __aexit__(self, *args) -> None:
 		await self.cursor.close()
 		await self.connection.close()
 
@@ -50,7 +50,7 @@ class TodoDB:
 		"""
 		if len(reason) > 50 and not await has_user_voted(user_id=user):
 			raise BadTodo("Your task's reason is way too big, to have a bigger limit please consider giving me a [vote](<https://top.gg/bot/778785822828265514/vote>) :D")
-		elif (task_amounts:=await self.load_todo_amounts(user=user)) > 10 and not await has_user_voted(user_id=user):
+		elif (task_amounts:=await self.load_todo_amounts(user=user)) >= 10 and not await has_user_voted(user_id=user):
 			raise BadTodo("You can't have more than 10 active tasks at once. Consider giving me a [vote](<https://top.gg/bot/778785822828265514/vote>) to increase the limit :D")
 		elif len(reason) > 250:
 			raise BadTodo("Your task's reason can't be larger than 250 characters")
@@ -60,7 +60,7 @@ class TodoDB:
 		INSERT INTO todos VALUES (?, (SELECT IFNULL(MAX(id)+1,0) FROM todos WHERE user=?), ?, ?)
 		""",(user,user,timestamp,reason))
 		await self.connection.commit()
-		return Todo(user,await self.load_todo_amounts(user=user)-1,timestamp=timestamp,reason=reason)
+		return Todo(user,await self.load_todo_amounts(user=user),timestamp=timestamp,reason=reason)
 
 	async def delete_todo(self, *, user: int, id: int) -> None:
 		"""
@@ -116,14 +116,13 @@ class TodoDB:
 				raise NoTodoFound('You have no tasks saved')
 		return Todo(*results)
 	
-	async def load_all_user_todos_id(self, *, user: int, limit: int = -1) -> Optional[list[int]]:
+	async def load_all_user_todos_id(self, *, user: int, limit: int = -1) -> Optional[List[int]]:
 		"""
 		Returns all the IDs
 
 		user `int`: The user ID
 		limit `int`: The lookup limit
 		"""
-
 		await self.cursor.execute("""
 		SELECT id FROM todos
 		WHERE user = ? LIMIT ?
@@ -131,7 +130,7 @@ class TodoDB:
 		results = await self.cursor.fetchall()
 		return [result[0] for result in results] if results != [] else None
 
-	async def load_autocomplete(self,*, user: int, reason: str, limit: int = -1) -> Optional[list[Todo]]:
+	async def load_autocomplete(self,*, user: int, reason: str, limit: int = -1) -> Optional[List[Todo]]:
 		"""
 		Returns a list of the TODOs that have a reason LIKE the given reason
 

@@ -1,3 +1,4 @@
+import importlib
 import discord
 from discord import app_commands
 from discord.ext import commands
@@ -6,6 +7,8 @@ from utils.websiteSS import get_ss, BadURL, BadResponse
 from typing import Literal
 import os
 import logging
+from time import perf_counter
+from asyncio import TimeoutError
 logger = logging.getLogger(__name__)
 
 class RandomCog(commands.Cog):
@@ -26,8 +29,8 @@ class RandomCog(commands.Cog):
 		"""
 		await interaction.response.defer()
 		try:
-			await interaction.followup.send(await bypass(url=url))
-		except KeyError:
+			await interaction.followup.send(await bypass(url))
+		except (KeyError,TimeoutError):
 			await interaction.followup.send('Could not unshorten that link')
 		except ValueError:
 			await interaction.followup.send('Invalid URL')
@@ -68,19 +71,23 @@ class RandomCog(commands.Cog):
 	@app_commands.checks.cooldown(2,12,key=lambda i: i.user.id)
 	@app_commands.command(name='screenshot')
 	@app_commands.choices()
-	async def screenshot(self, interaction: discord.Interaction, link: str):
+	async def screenshot(self, interaction: discord.Interaction, link: str,
+					resolution: Literal['240p','360p','480p','720p','1080p','1440p','2160p'] = '1080p'):
 		"""Takes a screenshot of a given website
 
 		Args:
 			link (str): The URL of the desired website screenshot
+			resolution (Literal['240p','360p','480p','720p','1080p','1440p','2160p'], optional): The resolution of the screenshot. Defaults to 1080p.
 		"""
 		if interaction.channel is None: return
 		if isinstance(interaction.channel,(discord.DMChannel,discord.GroupChannel)) or not interaction.channel.is_nsfw():
 			await interaction.response.send_message('This command is only available for channels with NSFW enabled')
 			return
 		await interaction.response.defer()
+		height = int(resolution[:-1])
+		width = int(height*(16/9))
 		try:
-			fbytes = await get_ss(link=link)
+			fbytes = await get_ss(link,width,height)
 		except BadURL:
 			await interaction.followup.send('Must be a valid link. Valid link example: `http(s)://example.com`')
 		except BadResponse:
@@ -90,6 +97,7 @@ class RandomCog(commands.Cog):
 				title = f'Screenshot taken from {link}',
 				colour = discord.Colour.green(),
 			)
+			embed.set_footer(text=f"If the resolution is not the one specified, it's because I couldn't screenshot normally :<")
 			embed.set_image(url='attachment://image.png')
 			await interaction.followup.send(file=discord.File(fbytes,filename='image.png'),embed=embed)
 
@@ -98,25 +106,41 @@ class RandomCog(commands.Cog):
 			await interaction.response.send_message("Please don't spam this command :(",ephemeral=True)
 		else: raise error
 
+	@commands.command(name='mrl')
+	async def reload_module(self, ctx: commands.Context):
+		if ctx.author.id != 624277615951216643:
+			return
+		await ctx.send('trying')
+		start = perf_counter()
+		for item in ['cogs','utils']:
+			for file in os.listdir(item):
+				if file.endswith('.py'):
+					# module = importlib.import_module
+					importlib.reload(importlib.import_module(f'{item}.{file[:-3]}'))
+					if item == 'cogs':
+						await self.bot.reload_extension('cogs.'+file[:-3])
+		await ctx.send(f'done. took {perf_counter()-start}s')
+
 	@commands.command(name='rl')
 	@commands.is_owner()
-	async def reload_cog(self, ctx: commands.Context, cog: Literal['giveawayCog','randomCog','reminderCog','customEmbedCog','todoCog','all']):
+	async def reload_ext(self, ctx: commands.Context, ext: str):
 		if ctx.author.id != 624277615951216643: #useless but just incase
 			logger.warning(f'{ctx.author.id} somehow got here')
 			return
-		async def reload_cog(cog: str) -> None:
+		async def rl_ext(ext: str) -> None:
 			try:
-				await self.bot.reload_extension('cogs.'+cog)
-				await ctx.send(f'Reloaded {cog}')
+				await self.bot.reload_extension('cogs.'+ext)
+				await ctx.send(f'Reloaded {ext}')
 			except commands.ExtensionNotFound:
-				await ctx.send(f"Couldn't reload {cog}. Typo?")
-		if cog == 'all':
-			for item in ('giveawayCog','randomCog','reminderCog','customEmbedCog','todoCog'):
-				await reload_cog(item)
+				await ctx.send(f"Couldn't reload {ext}. Typo?")
+		if ext == 'all':
+			for file in os.listdir('cogs'):
+				if file.endswith('.py'):
+					await rl_ext(file[:-3])
 		else:
-			await reload_cog(cog)
+			await rl_ext(ext)
 		
-	@reload_cog.error
+	@reload_ext.error
 	async def reload_bad_command(self, ctx: commands.Context, error: commands.CommandError):
 		if isinstance(error,commands.BadLiteralArgument):
 			await ctx.send('bad argument')

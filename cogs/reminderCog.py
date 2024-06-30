@@ -4,36 +4,35 @@ from discord.ext import commands,tasks
 import asyncio
 from utils import remind
 from time import time
-from ast import literal_eval
 import logging
+from typing import Optional, List
 logger = logging.getLogger(__name__)
 
-async def reminder_autocomplete(interaction: discord.Interaction, current: str):
+async def reminder_autocomplete(interaction: discord.Interaction, current: str) -> List[app_commands.Choice[int]]:
 	async with remind.Reader() as rd:
 		if current == '':
 			reminders = await rd.load_all_user_reminders(user=interaction.user.id,limit=25)
 			if reminders is None:
 				return []
-			choices_list = []
+			choices_list: List[app_commands.Choice[int]] = []
 			for rem in reminders:
-				rem_info = await remind.check_remind(user=interaction.user.id,id=rem[4])
-				choices_list.append(app_commands.Choice(name=f"{rem[4]}. {rem_info.reason if len(rem_info.reason) <= 30 else rem_info.reason[:-3]+'...'}",value=rem[4]))
+				choices_list.append(app_commands.Choice(name=f"{rem.id}. {rem.reason if len(rem.reason) <= 30 else rem.reason[:27]+'...'}",value=rem.id))
 			return choices_list
 		else:		
 			try:
-				rem_info = await remind.check_remind(user=interaction.user.id,id=int(current))
-				return [app_commands.Choice(name=f"{current}. {rem_info.reason if len(rem_info.reason) <= 30 else rem_info.reason[:-3]+'...'}",value=int(current))]
+				rem = await remind.check_remind(user=interaction.user.id,id=int(current))
+				return [app_commands.Choice(name=f"{current}. {rem.reason if len(rem.reason) <= 30 else rem.reason[:27]+'...'}",value=int(current))]
 			except (TypeError,remind.BadReminder):
 				return []
 			except ValueError:
-				rem_info = await rd.load_autocomplete(user=interaction.user.id,reason=current,limit=25)
-				if rem_info is None: return []
-				return [app_commands.Choice(name=f"{rem[4]}. {rem[2] if len(rem[2]) <= 30 else rem[2][:-3]+'...'}",value=rem[4]) for rem in rem_info]
+				reminders = await rd.load_autocomplete(user=interaction.user.id,reason=current,limit=25)
+				if reminders is None: return []
+				return [app_commands.Choice(name=f"{rem.id}. {rem.reason if len(rem.reason) <= 30 else rem.reason[:27]+'...'}",value=rem.id) for rem in reminders]
 
 class ReminderPaginator(ui.View):
 	index = 0
-	message: discord.InteractionMessage | None = None
-	def __init__(self, pages: list[int], user_view: int,timeout: int | None = 180):
+	message: Optional[discord.InteractionMessage] = None
+	def __init__(self, pages: List[int], user_view: int,timeout: Optional[int] = 180):
 		super().__init__(timeout=timeout)
 		self.pages = pages
 		self.user_view = user_view
@@ -234,20 +233,6 @@ class RemindCog(commands.GroupCog,name='reminder'):
 		check = await remind.check_remind(user=user,id=id)
 		await ctx.send(f'{check}')
 
-	@commands.command(name='seeallreminders')
-	async def see_all_reminders(self, ctx: commands.Context):
-		if ctx.author.id != 624277615951216643:
-			return
-		content = ''
-		async with remind.Reader() as f:
-			for item in await f.load_everything():
-				content += f'**User**: {item[0]}\n' \
-				f'**Timestamp**: <t:{item[1]}>\n' \
-				f'**Reason**: {item[2]}\n' \
-				f'**Channel**: {item[3]}\n' \
-				f'**ID**: {item[4]}\n'
-			await ctx.send(content=content)
-
 	@app_commands.checks.cooldown(2,7,key=lambda i: i.user.id)
 	@app_commands.command(name='add')
 	async def add_reminder(self, interaction: discord.Interaction,reason: str,days: int = 0,hours: int = 0, minutes: int = 0):
@@ -319,17 +304,15 @@ class RemindCog(commands.GroupCog,name='reminder'):
 			embed.title = f"Found reminder of ID {id}!"
 			embed.description = f'This reminder will fire at <t:{items.timestamp}>\nWith reason **{items.reason}**'
 			embed.colour = discord.Colour.green()
+		except remind.ReminderNotValid as e:
+			# print(e,type(e),eval(str(e)))
+			embed.title = "No reminder found"
+			embed.description = f'No reminder of id **{id}** found.\nYour reminders: {e}' # f string already handles str(e)
+			embed.colour = discord.Colour.red()
 		except remind.BadReminder as e:
 			embed.title = "No reminder found"
 			embed.description = str(e)
 			embed.description += '\nYou have no reminders'
-			embed.colour = discord.Colour.red()
-		except TypeError as e:
-			# print(e,type(e),eval(str(e)))
-			embed.title = "No reminder found"
-			embed.description = f'No reminder of id **{id}** found.\nYour reminders: '
-			for item in literal_eval(str(e)):
-				embed.description += f'**{item}** ' #type: ignore
 			embed.colour = discord.Colour.red()
 		else:
 			view = ui.View(timeout=360)

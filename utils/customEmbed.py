@@ -1,5 +1,5 @@
 import aiosqlite
-from typing import Any, Self, Optional
+from typing import Any, Self, Optional, List, Dict
 
 class TagInUse(Exception):
     ...
@@ -28,7 +28,7 @@ class CustomEmbed:
 			embed TEXT
 		)
 		""")
-	async def new_embed(self,user: int, tag: str, embed: dict[Any,Any]) -> None:
+	async def new_embed(self,user: int, tag: str, embed: Dict[Any,Any]) -> None:
 		if await self.load_embed(user=user,tag=tag) is not None:
 			raise TagInUse('Tag already in use')
 		if await self.embeds_amount(user=user) >= 10:
@@ -45,7 +45,7 @@ class CustomEmbed:
 		""",(user,tag))
 		result = await self.cursor.fetchone()
 		return result[0] if result is not None else None
-	async def load_autocomplete(self, user: int, tag: str) -> Optional[list[str]]:
+	async def load_autocomplete(self, user: int, tag: str) -> Optional[List[str]]:
 		await self.cursor.execute("""
 		SELECT tag FROM ce
 		WHERE user = ? AND tag LIKE ? LIMIT 25

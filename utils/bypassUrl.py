@@ -1,4 +1,4 @@
-from aiohttp import ClientSession
+from aiohttp import ClientSession, ClientTimeout
 import re
 from utils.sm_utils import caching
 
@@ -10,7 +10,8 @@ async def bypass(url: str) -> str:
 	params = {
 		'url':url
 	}
-	async with ClientSession() as session:
+	timeout = ClientTimeout(total=15)
+	async with ClientSession(timeout=timeout) as session:
 		async with session.get(f"https://bypass.pm/bypass2",params=params) as data:
 			if data.status != 200:
 				raise KeyError

@@ -4,13 +4,13 @@ from discord.ext import commands
 import re
 from datetime import datetime
 from typing import Union, Optional, Any
-from utils.colors import hex_colors, rgb_to_hex
 from utils.customEmbed import CustomEmbed, BadTag, TagInUse, TooManyEmbeds
 from utils import sm_utils
 import time
 from ast import literal_eval
 import logging
 logger = logging.getLogger(__name__)
+
 
 default_embed = discord.Embed(
 	title='This is the title',
@@ -39,7 +39,7 @@ async def size_check(embed: discord.Embed, *args) -> bool:
 		embed_size += len(arg)
 	return embed_size > 6000
 class EmbedMaker(discord.ui.View):
-	def __init__(self, user_embed: discord.User | discord.Member):
+	def __init__(self, user_embed: Union[discord.User,discord.Member]):
 		super().__init__(timeout=7200)
 		self.user_embed = user_embed
 
@@ -88,7 +88,7 @@ class EmbedMaker(discord.ui.View):
 				'timestamp':int(embed.timestamp.timestamp()) if embed.timestamp is not None else ''
 			}
 		}
-		place_holders['general']['color'] = rgb_to_hex(embed.color.r,embed.color.g,embed.color.b) if embed.color is not None else None
+		place_holders['general']['color'] = sm_utils.rgb_to_hex(embed.color.r,embed.color.g,embed.color.b) if embed.color is not None else None
 		options: dict[str,discord.ui.Modal] = {
 			'general':EmbedPrompt(place_holders=place_holders["general"]),
 			'img':EmbedURL(place_holders=place_holders["img"]),
@@ -133,7 +133,7 @@ class EmbedFields:
 				return
 			embed.add_field(name=self.name_.value,value=self.value_.value,inline=self.inline_.value=='')
 			if await size_check(embed):
-				await interaction.response.send_message("Discord limits embeds to not be larger than 6000 characters in total",ephemeral=True)
+				await interaction.response.send_message("Discord limits embeds not to be larger than 6000 characters in total",ephemeral=True)
 				return
 			await interaction.response.edit_message(embed=embed)
 	class RemoveField(discord.ui.Modal,title='Removes a field'):
@@ -208,7 +208,7 @@ class EmbedAuthor(discord.ui.Modal,title='Edit the author!'):
 			await interaction.response.send_message("Something wrong happened",ephemeral=True)
 		embed.set_author(name=self.name_.value,url=url,icon_url=icon_url) if self.name_.value != '' else embed.remove_author()
 		if await size_check(embed):
-			await interaction.response.send_message("Discord limits embeds to not be larger than 6000 characters in total",ephemeral=True)
+			await interaction.response.send_message("Discord limits embeds not to be larger than 6000 characters in total",ephemeral=True)
 			return
 		await interaction.response.edit_message(embed=embed)
 class EmbedFooter(discord.ui.Modal,title='Edit the footer!'):
@@ -240,7 +240,7 @@ class EmbedFooter(discord.ui.Modal,title='Edit the footer!'):
 			await interaction.response.send_message("Something wrong happened",ephemeral=True)
 		embed.set_footer(text=self.text_.value,icon_url=icon_url)
 		if await size_check(embed):
-			await interaction.response.send_message("Discord limits embeds to not be larger than 6000 characters in total",ephemeral=True)
+			await interaction.response.send_message("Discord limits embeds not to be larger than 6000 characters in total",ephemeral=True)
 			return
 		try: embed.timestamp = datetime.fromtimestamp(int(self.timestamp_.value))
 		except (ValueError,OSError): embed.timestamp = None
@@ -297,9 +297,9 @@ class EmbedPrompt(discord.ui.Modal,title='Edit the embed!'):
 			return
 		valid_url = re.compile(r'http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*(),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+')
 		if not self.color_.value.isdigit():
-			try:  color_sel = hex_colors[self.color_.value] if self.color_.value in list(hex_colors) else int(self.color_.value[1:],16)
+			try:  color_sel = sm_utils.hex_colors[self.color_.value] if self.color_.value in list(sm_utils.hex_colors) else int(self.color_.value[1:],16)
 			except ValueError: color_sel = None
-			try: color_sel = rgb_to_hex(*self.color_.value.split(',',3))
+			try: color_sel = sm_utils.rgb_to_hex(*self.color_.value.split(',',3))
 			except TypeError: ...
 		else: color_sel = int(self.color_.value)
 		try: embed = interaction.message.embeds[0] if interaction.message is not None else [][0]
@@ -312,7 +312,7 @@ class EmbedPrompt(discord.ui.Modal,title='Edit the embed!'):
 		else:
 			embed.url = None
 		if await size_check(embed):
-			await interaction.response.send_message("Discord limits embeds to not be larger than 6000 characters in total",ephemeral=True)
+			await interaction.response.send_message("Discord limits embeds not to be larger than 6000 characters in total",ephemeral=True)
 			return
 		await interaction.response.edit_message(embed=embed)
 class SaveEmbed(discord.ui.Modal,title='Saves the embed!'):

@@ -1,9 +1,10 @@
 import time
 import aiosqlite
 from utils.userVoted import has_user_voted
+from typing import List, Self
 
 class Reminder:
-	def __init__(self,user: int, timestamp: int, reason: str, channel: int, id: int):
+	def __init__(self,user: int, timestamp: int, reason: str, channel: int, id: int) -> None:
 		self.user = user
 		self.timestamp = timestamp
 		self.reason = reason
@@ -11,6 +12,30 @@ class Reminder:
 		self.id = id
 
 class BadReminder(Exception): ...
+class ReminderNotValid(BadReminder):
+	"""
+	When a reminder is not found but there are reminders saved for that user
+	"""
+	def __init__(self, data: List[int]) -> None:
+		self.data = data
+		self.index = 0
+	
+	def __iter__(self) -> Self:
+		return self
+	
+	def __next__(self) -> int:
+		if self.index < len(self.data):
+			self.index += 1
+			return self.data[self.index-1]
+		else:
+			self.index = 0
+			raise StopIteration
+			
+	def __getitem__(self, value: int) -> int:
+		return self.data[value]
+
+	def __str__(self) -> str:
+		return ' '.join(map(lambda x: f'**{x}**',self.data))
 
 class Reader:
 
@@ -69,53 +94,55 @@ class Reader:
 		""",(timestamp,reason,user,id))
 		await self.connection.commit()
 
-	async def load_remind(self, user: int, id: int) -> tuple[int,int,str,int,int] | None:
+	async def load_remind(self, user: int, id: int) -> Reminder | None:
 		await self.cursor.execute("""
 		SELECT * FROM usuarios
 		WHERE user = ? AND id = ?
 		""",(user,id))
-		return await self.cursor.fetchone() #type: ignore
+		result = await self.cursor.fetchone()
+		return Reminder(*result) if result is not None else None
 	
-	async def load_all_user_reminders_id(self, user: int, order_by: str = 'timestamp') -> list[int]:
+	async def load_all_user_reminders_id(self, user: int, order_by: str = 'timestamp') -> List[int]:
 		await self.cursor.execute("""
 		SELECT id FROM usuarios
 		WHERE user = ? ORDER BY ?
 		""",(user,order_by))
 		results = await self.cursor.fetchall()
 		return [result[0] for result in results]
-		# return await self.cursor.fetchall() #type: ignore
 
-	async def load_timestamp(self,actual_time: int) -> list[tuple[int,int,str,int,int]] | None:
+	async def load_timestamp(self,actual_time: int) -> List[Reminder] | None:
 		await self.cursor.execute("""
 		SELECT * FROM usuarios
 		WHERE timestamp - ? < 12
 		ORDER BY timestamp ASC
 		""",(actual_time,))
-		return await self.cursor.fetchall() #type: ignore
+		results = await self.cursor.fetchall()
+		return [Reminder(*result) for result in results]
 	
-	async def load_everything(self) -> list[tuple[int,int,str,int,int]]:
+	async def load_everything(self) -> List[Reminder]:
 		await self.cursor.execute("""
 		SELECT * FROM usuarios
 		""")
-		return await self.cursor.fetchall() #type: ignore
+		results = await self.cursor.fetchall()
+		return [Reminder(*result) for result in results]
 
-	async def load_all_user_reminders(self, user: int, limit: int = -1) -> list[tuple[int,int,str,int,int]] | None:
+	async def load_all_user_reminders(self, user: int, limit: int = -1) -> List[Reminder] | None:
 		await self.cursor.execute("""
 		SELECT * FROM usuarios
 		WHERE user = ? ORDER BY id LIMIT ?
 		""",(user,limit))
 		results = await self.cursor.fetchall()
-		return results if results != [] else None #type: ignore
+		return [Reminder(*result) for result in results] if results != [] else None
 	
-	async def load_autocomplete(self, user: int, reason: str, limit: int  =-1) -> list[tuple[int,int,str,int,int]] | None:
+	async def load_autocomplete(self, user: int, reason: str, limit: int  =-1) -> List[Reminder] | None:
 		await self.cursor.execute("""
 		SELECT * FROM usuarios
 		WHERE user = ? AND reason LIKE ? LIMIT ?
 		""",(user,'%'+reason+'%',limit))
 		results = await self.cursor.fetchall()
-		return results if results != [] else None #type: ignore
+		return [Reminder(*result) for result in results] if results != [] else None
 
-async def add_remind(user: int,channel_id: int | None,reason: str, days: int, hours: int, minutes: int) -> Reminder: # dict[str,int]
+async def add_remind(user: int,channel_id: int | None,reason: str, days: int, hours: int, minutes: int) -> Reminder:
 	if channel_id is None:
 		raise TypeError("You must provide a channel_id")
 	timestamp = int(time.time())+(days*86400)+(hours*3600)+(minutes*60)
@@ -135,7 +162,6 @@ async def add_remind(user: int,channel_id: int | None,reason: str, days: int, ho
 		await f.new_reminder(user=user,id=user_max_id+1,timestamp=timestamp,channel_id=channel_id,reason=reason)
 	
 	return Reminder(user,timestamp,reason,channel_id,user_max_id+1)
-	#return {'id':user_max_id+1,'timestamp':timestamp}
 
 async def remove_remind(user: int, id: int):
 	async with Reader() as f:
@@ -153,13 +179,13 @@ async def edit_remind(user: int, id: int, days: int = 0, hours: int = 0, minutes
 		value = await f.load_remind(user=user,id=id)
 		if value is None:
 			raise BadReminder(f'No reminder of id **{id}** found')
-		reason = value[2] if reason == '' else reason
-		timestamp = value[1] if (days == 0 and hours == 0 and minutes == 0) else int(time.time())+(days*86400)+(hours*3600)+(minutes*60)
+		reason = value.reason if reason == '' else reason
+		timestamp = value.timestamp if (days + hours + minutes <= 0) else int(time.time())+(days*86400)+(hours*3600)+(minutes*60)
 		await f.update_value(user=user,id=id,timestamp=timestamp,reason=reason)
 		new_reminder = await f.load_remind(user=user,id=id)
 		if new_reminder is None:
 			raise BadReminder(f"No reminder of id **{id}** found. But this shouldn't have happened, please contact the developer.")
-		return Reminder(*new_reminder)
+		return new_reminder
 	
 
 async def check_remind(user: int, id: int) -> Reminder:
@@ -168,17 +194,15 @@ async def check_remind(user: int, id: int) -> Reminder:
 		if value is None and await f.load_all_user_reminders_id(user=user) == []:
 			raise BadReminder(f'No reminder of id **{id}** found')
 		elif value is None:
-			raise TypeError(await f.load_all_user_reminders_id(user=user))
-		return Reminder(*value)
-		#return value
+			raise ReminderNotValid(await f.load_all_user_reminders_id(user=user))
+		return value
 
-async def check_remind_fire() -> list[Reminder]:
+async def check_remind_fire() -> List[Reminder]:
 	async with Reader() as f:
 		values = await f.load_timestamp(actual_time=int(time.time()))
 		if values is None:
 			raise BadReminder('No reminder to fire')
-		return [Reminder(*value) for value in values]
-		#return value
+		return [value for value in values]
 
 async def manual_add(user: int, channel_id: int, reason: str, timestamp: int, id: int):
 	async with Reader() as f:

@@ -1,5 +1,19 @@
 import aiosqlite
-from typing import Self
+from typing import Self, List, Union, Dict, Tuple
+
+class Giveaway:
+	def __init__(self, id: int, channel_id: int, timestamp: int, prize: str, winners: int, hoster_id: int) -> None:
+		self.id = id
+		self.channel_id = channel_id
+		self.timestamp = timestamp
+		self.prize = prize
+		self.winners = winners
+		self.hoster_id = hoster_id
+
+class Participant:
+	def __init__(self, participant_id: int, giveaway_id: int) -> None:
+		self.participant_id = participant_id
+		self.giveaway_id = giveaway_id
 
 class GiveawayDB:
 
@@ -35,7 +49,7 @@ class GiveawayDB:
 		)
 		""")
 
-	async def fetch_participants(self,*,giveaway_id: int) -> list[tuple[int,str]]:
+	async def fetch_participants(self,*,giveaway_id: int) -> List[Tuple[int,str]]:
 		await self.cursor.execute("""
 		SELECT DISTINCT participants.participant_id, giveaways.prize 
 		FROM giveaways
@@ -46,13 +60,13 @@ class GiveawayDB:
 		assert results != [], 'No participants'
 		return results #type: ignore
 	
-	async def fetch_giveaway(self,*,giveaway_id: int) -> dict[str,int | str]:
+	async def fetch_giveaway(self,*,giveaway_id: int) -> Giveaway:
 		await self.cursor.execute("""
 		SELECT * FROM giveaways WHERE id = ?
 		""",(giveaway_id,))
-		results = await self.cursor.fetchone()
-		assert results is not None, 'No giveaway found'
-		return {'id':results[0],'channel_id':results[1],'timestamp':results[2],'prize':results[3],'winners':results[4],'hoster_id':results[5]}
+		result = await self.cursor.fetchone()
+		assert result is not None, 'No giveaway found'
+		return Giveaway(*result)
 
 	async def giveaway_exists(self,*,giveaway_id: int) -> bool:
 		"""
@@ -64,7 +78,7 @@ class GiveawayDB:
 		results = await self.cursor.fetchone()
 		return results != None
 
-	async def check_timestamp_fire(self,*, time: int) -> list[tuple[int,int,int,str,int,int]]:
+	async def check_timestamp_fire(self,*, time: int) -> List[Giveaway]:
 		await self.cursor.execute("""
 		SELECT * from giveaways
 		WHERE timestamp - ? < 12
@@ -72,7 +86,7 @@ class GiveawayDB:
 		""",(time,))
 		results = await self.cursor.fetchall()
 		assert results != [], 'No giveaway to fire'
-		return results #type: ignore
+		return [Giveaway(*result) for result in results]
 	
 	async def create_giveaway(self, *,id: int, channel_id:int, time: int, prize: str, winners: int, user_id: int) -> None:
 		await self.cursor.execute("""
@@ -81,35 +95,35 @@ class GiveawayDB:
 		await self.connection.commit()
 
 	async def delete_giveaway(self, giveaway_id: int) -> None:
-		assert await self.giveaway_exists(giveaway_id=giveaway_id) != False, 'No giveaway found'
+		assert await self.giveaway_exists(giveaway_id=giveaway_id), 'No giveaway found'
 		await self.cursor.execute("""
 		DELETE FROM giveaways WHERE id = ?
 		""",(giveaway_id,))
 		await self.connection.commit()
 
 	async def insert_user(self,*, user: int, giveaway_id: int) -> None:
-		assert await self.giveaway_exists(giveaway_id=giveaway_id) != False, 'No giveaway found'
+		assert await self.giveaway_exists(giveaway_id=giveaway_id), 'No giveaway found'
 		await self.cursor.execute("""
 		INSERT INTO participants VALUES (?, ?)
 		""",(user,giveaway_id))
 		await self.connection.commit()
 
 	async def remove_user(self,*,user:int, giveaway_id: int) -> None:
-		assert await self.user_already_in(user=user,giveaway_id=giveaway_id) == True, 'User not in that giveaway'
+		assert await self.user_already_in(user=user,giveaway_id=giveaway_id), 'User not in that giveaway'
 		await self.cursor.execute("""
 		DELETE FROM participants WHERE participant_id = ? AND giveaway_id = ?
 		""",(user,giveaway_id))
 		await self.connection.commit()
 
 	async def user_already_in(self,*,user:int,giveaway_id: int) -> bool:
-		assert await self.giveaway_exists(giveaway_id=giveaway_id) != False, 'No giveaway found'
+		assert await self.giveaway_exists(giveaway_id=giveaway_id), 'No giveaway found'
 		await self.cursor.execute("""
 		SELECT participant_id FROM participants WHERE participant_id = ? AND giveaway_id = ?
 		""",(user,giveaway_id))
 		result = await self.cursor.fetchone()
 		return result is not None
 	
-	async def select_all(self) -> list[tuple[int,int,int,str,int]]:
+	async def select_all(self) -> Dict[str,List[Union[Giveaway,Participant]]]:
 		await self.cursor.execute("""
 		SELECT * FROM giveaways
 		""")
@@ -118,7 +132,11 @@ class GiveawayDB:
 		SELECT * FROM participants
 		""")
 		part = await self.cursor.fetchall()
-		return {'giv':giv,'part':part} #type: ignore
+		results = {
+			'giveaway': [Giveaway(*g) for g in giv],
+			'participants': [Participant(*p) for p in part]
+		}
+		return results
 
 	async def fetch_hosted_giveaways(self, user_id: int) -> int:
 		await self.cursor.execute("""

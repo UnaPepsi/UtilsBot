@@ -30,10 +30,10 @@ logger.addHandler(console_handler)
 discord.utils.setup_logging(handler=console_handler)
 
 class Bot(commands.Bot):
-	def __init__(self,command_prefix: str,intents: Intents,activity: Optional[Game] = None):
+	def __init__(self,command_prefix: str,intents: Intents,activity: Optional[Game] = None) -> None:
 		super().__init__(command_prefix=command_prefix,intents=intents,activity=activity)
 	
-	async def setup_hook(self):
+	async def setup_hook(self) -> None:
 		tasks = []
 		for item in listdir('cogs'):
 			if item.endswith('.py'):
@@ -41,10 +41,15 @@ class Bot(commands.Bot):
 		asyncio.gather(*tasks)
 		self.add_dynamic_items(GiveawayJoinDynamicButton)
 	
-	async def load_extensions(self, ext: str):
+	async def load_extensions(self, ext: str) -> None:
 		await self.load_extension(ext)
 
-bot = Bot(command_prefix='xd',intents=Intents(dm_messages = False, guild_messages = True,members = True,guilds = True,message_content = True),activity=Game(name="New commands! check them out"))
+	async def on_command_error(self, ctx: commands.Context, error: commands.CommandError) -> None:
+		if isinstance(error, commands.CommandNotFound):
+			return
+		else: raise error
+
+bot = Bot(command_prefix='ub',intents=Intents(dm_messages = False, guild_messages = True,members = True,guilds = True,message_content = True),activity=Game(name="New commands! check them out"))
 
 if __name__ == '__main__':
 	try:

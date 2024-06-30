@@ -1,15 +1,15 @@
 import discord
 from discord.ext import commands, tasks
 from discord import app_commands, ui
-from datetime import timedelta
+from datetime import timedelta, datetime
 import re
-from utils.giveaway import GiveawayDB
+from utils.giveaway import GiveawayDB, Giveaway, Participant
 from utils import sm_utils
 from time import time
-from datetime import datetime
 import asyncio
 from random import randint
 from utils.userVoted import has_user_voted
+from typing import List, Tuple
 import logging
 logger = logging.getLogger(__name__)
 
@@ -150,7 +150,7 @@ class GiveawayModal(ui.Modal,title='Creates a giveaway!'):
 		)
 		_winners = ui.TextInput(
 			label = 'Winners',style=discord.TextStyle.short,
-			placeholder='How many winners? (max of 99)',required=True,
+			placeholder='How many winners? (max of 20)',required=True,
 			max_length=2
 		)
 		async def on_submit(self, interaction: discord.Interaction):
@@ -173,8 +173,8 @@ class GiveawayModal(ui.Modal,title='Creates a giveaway!'):
 				except ValueError:
 					await interaction.response.send_message('Duration invalid, if keeps failing you could try with a timestamp',ephemeral=True)
 					return
-			if (when-int(time()))/86400 > 180:
-				await interaction.response.send_message("A maximum of 6 months only",ephemeral=True)
+			if (when-int(time()))/86400 > 30:
+				await interaction.response.send_message("A maximum of 1 month only",ephemeral=True)
 				return
 			elif when < 30:
 				await interaction.response.send_message('Duration cannot be less than 30 seconds',ephemeral=True)
@@ -194,6 +194,9 @@ class GiveawayModal(ui.Modal,title='Creates a giveaway!'):
 			if winners < 1:
 				await interaction.response.send_message('At least 1 person has to win something :<',ephemeral=True)
 				return
+			if winners > 20:
+				await interaction.response.send_message('You can only have a max of 20 participants per giveaway',ephemeral=True)
+				return
 			if embed.description is None:
 				await interaction.response.send_message('Something went wrong :(',ephemeral=True)
 				return
@@ -201,9 +204,9 @@ class GiveawayModal(ui.Modal,title='Creates a giveaway!'):
 			view = ui.View(timeout=None)
 			view.add_item(GiveawayJoinDynamicButton(interaction.channel.id))
 			await interaction.response.send_message(embed=embed,view=view)
-			msg_id = await interaction.original_response()
+			msg_itr = await interaction.original_response()
 			async with GiveawayDB() as gw:
-				await gw.create_giveaway(id=msg_id.id,channel_id=msg_id.channel.id,time=when+c_time,prize=self._prize.value,winners=winners,user_id=interaction.user.id)
+				await gw.create_giveaway(id=msg_itr.id,channel_id=msg_itr.channel.id,time=when+c_time,prize=self._prize.value,winners=winners,user_id=interaction.user.id)
 
 
 class GiveawayCog(commands.GroupCog,name='giveaway'):
@@ -217,7 +220,7 @@ class GiveawayCog(commands.GroupCog,name='giveaway'):
 			return
 		try:
 			async with GiveawayDB() as gw:
-				items: list[tuple[int,int,int,str,int,int]] = await gw.check_timestamp_fire(time=int(time()))
+				items = await gw.check_timestamp_fire(time=int(time()))
 		except AssertionError:
 			return
 		task_list = []
@@ -241,18 +244,18 @@ class GiveawayCog(commands.GroupCog,name='giveaway'):
 			await gw.delete_giveaway(giveaway_id=payload.message_id)
 			logger.debug(f'giveaway {payload.message_id} deleted')
 
-	async def send_giveaways(self, item: tuple[int,int,int,str,int,int]):
+	async def send_giveaways(self, item: Giveaway):
 		async def delgiveaway():
 			try:
 				async with GiveawayDB() as gw:
-					await gw.delete_giveaway(giveaway_id=item[0])
+					await gw.delete_giveaway(giveaway_id=item.id)
 			except AssertionError as e:
 				return
-		await asyncio.sleep(item[2]-int(time()))
+		await asyncio.sleep(item.timestamp-time())
 		try:
-			logger.debug(f'Checking giveaway {item[0]}')
-			channel = await self.bot.fetch_channel(item[1])
-			msg: discord.Message = await channel.fetch_message(item[0]) #type: ignore
+			logger.debug(f'Checking giveaway {item.id}')
+			channel = await self.bot.fetch_channel(item.channel_id)
+			msg: discord.Message = await channel.fetch_message(item.id) #type: ignore
 			embed = msg.embeds[0]
 			if embed is None or embed.description is None:
 				raise TypeError()
@@ -263,8 +266,8 @@ class GiveawayCog(commands.GroupCog,name='giveaway'):
 			return
 		try:
 			async with GiveawayDB() as gw:
-				winners_id: list[tuple[int,str]] = await gw.fetch_participants(giveaway_id=item[0])
-				if len(winners_id) < item[4]:
+				participants: List[Tuple[int,str]] = await gw.fetch_participants(giveaway_id=item.id)
+				if len(participants) < item.winners:
 					raise AssertionError('Not enough participants')
 		except AssertionError as e:
 			try:
@@ -278,14 +281,14 @@ class GiveawayCog(commands.GroupCog,name='giveaway'):
 		else:
 			try:
 				winners = ''
-				prize = winners_id[0][1]
-				for i in range(item[4]):
-					if len(winners_id) != 0:
-						rand = randint(0,len(winners_id)-1)
-						winners += f'<@{winners_id.pop(rand)[0]}> '
+				prize = participants[0][1]
+				for _ in range(item.winners):
+					if len(participants) != 0:
+						rand = randint(0,len(participants)-1)
+						winners += f'<@{participants.pop(rand)[0]}> '
 					else:
 						logger.debug("No more winners")
-						winners += f'<@{winners_id.pop(0)[0]}> '
+						winners += f'<@{participants.pop(0)[0]}> '
 				await msg.reply(f"The giveaway for `{prize}` has ended! Winners: {winners}")
 				await msg.edit(embed=embed,view=None)
 				await delgiveaway()
@@ -320,9 +323,9 @@ class GiveawayCog(commands.GroupCog,name='giveaway'):
 			try:
 				giveaway = await gw.fetch_giveaway(giveaway_id=int(id))
 			except AssertionError:
-				await interaction.response.send_message('Hmm... giveaway not found, remember the id is the id of the giveaway message',ephemeral=True)
+				await interaction.response.send_message('Hmm... giveaway not found, remember the `id` is the `id` of the giveaway message',ephemeral=True)
 				return
-			if giveaway['hoster_id'] != interaction.user.id:
+			if giveaway.hoster_id != interaction.user.id:
 				await interaction.response.send_message("You have not created this giveaway!\n_If you're an admin you can remove a giveaway just by deleting the message_",ephemeral=True)
 				return
 			try:
