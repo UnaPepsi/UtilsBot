@@ -1,7 +1,7 @@
 from dotenv import load_dotenv
 load_dotenv()
 import discord
-from discord import Intents, Game
+from discord import Intents, CustomActivity, BaseActivity
 from discord.ext import commands
 from os import environ, listdir
 from typing import Optional
@@ -29,9 +29,9 @@ logger.addHandler(console_handler)
 
 discord.utils.setup_logging(handler=console_handler)
 
-class Bot(commands.Bot):
-	def __init__(self,command_prefix: str,intents: Intents,activity: Optional[Game] = None) -> None:
-		super().__init__(command_prefix=command_prefix,intents=intents,activity=activity)
+class UtilsBot(commands.Bot):
+	def __init__(self,intents: Intents,activity: Optional[BaseActivity] = None) -> None:
+		super().__init__(command_prefix=commands.when_mentioned_or('ub'),intents=intents,activity=activity)
 	
 	async def setup_hook(self) -> None:
 		tasks = []
@@ -49,9 +49,8 @@ class Bot(commands.Bot):
 			return
 		else: raise error
 
-bot = Bot(command_prefix='ub',intents=Intents(dm_messages = False, guild_messages = True,members = True,guilds = True,message_content = True),activity=Game(name="New commands! check them out"))
-
 if __name__ == '__main__':
+	bot = UtilsBot(intents=Intents(dm_messages = True, guild_messages = True,guilds = True),activity=CustomActivity(name="New commands! check them out"))
 	try:
 		asyncio.run(bot.start(environ['TOKEN']))
 	except KeyboardInterrupt:

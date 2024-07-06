@@ -25,14 +25,14 @@ async def get_ss(link: str, width: int=1920, height: int=1080) -> io.BytesIO:
 
 	async with async_playwright() as playwright:
 		try:
-			browser = await playwright.chromium.launch(proxy={"server": proxy})
+			browser = await playwright.chromium.launch(proxy={"server": 'http://'+proxy})
 			page = await browser.new_page()
 			await page.goto(link)
 			await page.set_viewport_size({"width": width, "height": height})
 			# await page.evaluate('document.body.style.zoom = "1000%"')
 			await page.evaluate('''(proxy) => {
     		document.body.innerHTML = document.body.innerHTML.replace(new RegExp(proxy, 'g'), '----------');
-			}''', proxy)
+			}''', proxy[:-6])
 			screenshot_bytes = await page.screenshot() #full_page=True
 			await browser.close()
 			return io.BytesIO(screenshot_bytes)
