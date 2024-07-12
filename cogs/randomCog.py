@@ -149,20 +149,11 @@ class RandomCog(commands.Cog):
 			return
 		raise error
 		
-	@commands.command(name='git')
+	@commands.command(name='source')
 	@commands.is_owner()
-	async def git_cmd(self, ctx:commands.Context, *, command: str):
-		if ctx.author.id != 624277615951216643:
-			logger.warning(f'{ctx.author.id} somehow got here')
-			return
-		code = os.popen(f'git {command}').read()
-		await ctx.send(code)
-
-	@git_cmd.error
-	async def git_bad_command(self, ctx: commands.Context, error: commands.CommandError):
-		if isinstance(error,commands.NotOwner):
-			return
-		raise error
+	async def source_code(self, ctx:commands.Context):
+		await ctx.reply('My source code is [here!](<https://github.com/UnaPepsi/UtilsBot>) :>',mention_author=False)
+		
 		
 async def setup(bot: commands.Bot):
 	await bot.add_cog(RandomCog(bot))

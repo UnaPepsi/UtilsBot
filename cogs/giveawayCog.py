@@ -215,9 +215,6 @@ class GiveawayCog(commands.GroupCog,name='giveaway'):
 	
 	@tasks.loop(seconds=10)
 	async def loop_check(self):
-		if not self.bot.is_ready():
-			await self.bot.wait_until_ready()
-			return
 		try:
 			async with GiveawayDB() as gw:
 				items = await gw.check_timestamp_fire(time=int(time()))
@@ -227,6 +224,16 @@ class GiveawayCog(commands.GroupCog,name='giveaway'):
 		for item in items:
 			task_list.append(asyncio.create_task(self.send_giveaways(item)))
 		await asyncio.gather(*task_list)
+	
+	@loop_check.before_loop
+	async def loop_check_before(self):
+		if not self.bot.is_ready():
+			await self.bot.wait_until_ready()
+			return
+
+	async def cog_unload(self):
+		self.loop_check.cancel()
+		logger.info('Cancelling giveaway loop check')
 
 	async def cog_load(self):
 		async with GiveawayDB() as gw:
@@ -238,10 +245,9 @@ class GiveawayCog(commands.GroupCog,name='giveaway'):
 	async def on_raw_message_delete(self, payload: discord.RawMessageDeleteEvent):
 		async with GiveawayDB() as gw:
 			try:
-				_ = await gw.fetch_giveaway(giveaway_id=payload.message_id)
+				await gw.delete_giveaway(giveaway_id=payload.message_id)
 			except AssertionError:
 				return
-			await gw.delete_giveaway(giveaway_id=payload.message_id)
 			logger.debug(f'giveaway {payload.message_id} deleted')
 
 	async def send_giveaways(self, item: Giveaway):
@@ -311,39 +317,52 @@ class GiveawayCog(commands.GroupCog,name='giveaway'):
 			raise error
 
 	@app_commands.command(name='remove')
+	@app_commands.guild_only()
 	async def remove_giveaway(self, interaction: discord.Interaction, id: str):
-		"""Removed an owned giveaway
+		"""Removes a giveaway. You can also remove a giveaway by deleting the message itself
 
 		Args:
 			id (str): The message ID of the giveaway
 		"""
+		if not isinstance(interaction.user,discord.Member) or interaction.guild is None: #make type checker happy
+			await interaction.response.send_message("Server only command")
+			return
 		try: int(id)
-		except ValueError: await interaction.response.send_message('Must be a valid Discord ID');return
+		except ValueError: await interaction.response.send_message('Must be a valid Discord Message ID');return
 		async with GiveawayDB() as gw:
 			try:
 				giveaway = await gw.fetch_giveaway(giveaway_id=int(id))
 			except AssertionError:
 				await interaction.response.send_message('Hmm... giveaway not found, remember the `id` is the `id` of the giveaway message',ephemeral=True)
 				return
-			if giveaway.hoster_id != interaction.user.id:
-				await interaction.response.send_message("You have not created this giveaway!\n_If you're an admin you can remove a giveaway just by deleting the message_",ephemeral=True)
+			if giveaway.hoster_id != interaction.user.id and not interaction.user.guild_permissions.manage_messages:
+				await interaction.response.send_message("Only people with `Manage Messages` or the Giveaway hoster can remove this giveaway",ephemeral=True)
 				return
+			message = None
 			try:
-				message = await interaction.channel.fetch_message(int(id)) #type: ignore
+				for channel in interaction.guild.channels:
+					if giveaway.channel_id != channel.id or isinstance(channel,(discord.ForumChannel,discord.CategoryChannel)):
+						continue
+					message = await channel.fetch_message(int(id))
+					break
 			except discord.NotFound:
-				await interaction.response.send_message('This giveaway exists, though the message id was not found. If this giveaway was made in another **channel** please use the command there',ephemeral=True)
+				await interaction.response.send_message("This giveaway exists, though the message could not be fetched. This shouldn't have happened. Please try again or contact the developer",ephemeral=True)
 				return
 			except discord.Forbidden:
 				await interaction.response.send_message('I have no permission to fetch messages from this channel :(',ephemeral=True)
 				return
 			try:
+				if message is None:
+					raise TypeError
 				await message.delete()
 			except (discord.Forbidden,discord.NotFound):
-				await interaction.response.send_message('Either I have no permissions or the giveaway message has already been deleted',ephemeral=True)
+				await interaction.response.send_message('Either I have no permissions to delete messages or the giveaway message has already been deleted',ephemeral=True)
+				return
+			except TypeError:
+				await interaction.response.send_message('This giveaway exists, but was not created in the same **Server** where you ran this command. Please run the command in the **Server** the giveaway was created',ephemeral=True)
 				return
 			# await gw.delete_giveaway(giveaway_id=id) on message delete already handles this
-			await interaction.response.send_message('Giveaway deleted!',ephemeral=True)
-
+			await interaction.response.send_message('Giveaway deleted! You can also delete giveaways by deleting the message itself',ephemeral=True)
 
 	@commands.command(name='check')
 	async def checkgiveaway(self, ctx: commands.Context):

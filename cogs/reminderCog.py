@@ -180,11 +180,12 @@ class RemindCog(commands.GroupCog,name='reminder'):
 			logger.info('Reminder table created')
 		self.loop_check.start()
 	
+	async def cog_unload(self):
+		self.loop_check.cancel()
+		logger.info('Cancelling reminder loop check')
+
 	@tasks.loop(seconds=10)
 	async def loop_check(self):
-		if not self.bot.is_ready():
-			await self.bot.wait_until_ready()
-			return
 		try:
 			items = await remind.check_remind_fire()
 		except remind.BadReminder:
@@ -216,6 +217,11 @@ class RemindCog(commands.GroupCog,name='reminder'):
 				await dm_channel.send('_Sending the reminder in your desired channel failed. So I instead reminded you here_')
 			except (discord.HTTPException,discord.NotFound,discord.Forbidden):
 				logger.warning(f"Couldn't send reminder to user {item.user}")
+
+	@loop_check.before_loop
+	async def loop_check_before(self):
+		if not self.bot.is_ready():
+			await self.bot.wait_until_ready()
 
 	@commands.command()
 	async def botsync(self, ctx: commands.Context):
