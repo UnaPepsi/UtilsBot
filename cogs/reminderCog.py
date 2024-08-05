@@ -170,6 +170,8 @@ class DeleteReminder(ui.Button):
 			embed.colour = discord.Colour.red()
 		await interaction.response.edit_message(embed=embed,view=None)
 
+@app_commands.allowed_installs(guilds=True,users=True)
+@app_commands.allowed_contexts(guilds=True,dms=True,private_channels=True)
 class RemindCog(commands.GroupCog,name='reminder'):
 	def __init__(self, bot: commands.Bot):
 		self.bot = bot
@@ -250,14 +252,22 @@ class RemindCog(commands.GroupCog,name='reminder'):
 			hours (int, optional): Hours to wait. Defaults to 0.
 			minutes (int, optional): Minutes to wait. Defaults to 0.
 		"""
+		ephemeral = not isinstance(interaction.user,discord.User) and interaction.user.resolved_permissions is not None and not interaction.user.resolved_permissions.embed_links
+		await interaction.response.defer(ephemeral=ephemeral)
+		channel_id = None
+		if interaction.is_guild_integration(): channel_id = interaction.channel_id
+		else:
+			channel_id = interaction.user.dm_channel.id if interaction.user.dm_channel is not None else (await interaction.user.create_dm()).id
 		embed = discord.Embed()
 		try:
 			if ((days*86400) + (hours*3600) + (minutes*60)) <= 0:
 				raise remind.BadReminder("You need to specify a valid time for the reminder")
-			values = await remind.add_remind(user=interaction.user.id,channel_id=interaction.channel_id,reason=reason,days=days,hours=hours,minutes=minutes)
+			values = await remind.add_remind(user=interaction.user.id,channel_id=channel_id,reason=reason,days=days,hours=hours,minutes=minutes)
 			embed.title = "Reminder created!"
 			embed.description = f"Reminder for <t:{values.timestamp}> of id **{values.id}**\nwith reason **\"{reason}\"** added successfully"
 			embed.colour = discord.Colour.green()
+			if not interaction.is_guild_integration() and interaction.guild:
+				embed.set_footer(text='Because this bot is not in this server, the reminder will be sent in your DMs')
 			view = ui.View(timeout=360)
 			view.add_item(DeleteReminder(user=interaction.user.id,id=values.id))
 			view.on_timeout = lambda : view.message.edit(view=None) #type: ignore
@@ -266,7 +276,7 @@ class RemindCog(commands.GroupCog,name='reminder'):
 			embed.description = str(e)
 			embed.colour = discord.Colour.red()
 			view = discord.utils.MISSING
-		await interaction.response.send_message(embed=embed,view=view)
+		await interaction.followup.send(embed=embed,view=view)
 		if isinstance(view,ui.View):
 			view.message = await interaction.original_response() #type: ignore
 	@add_reminder.error
@@ -283,6 +293,8 @@ class RemindCog(commands.GroupCog,name='reminder'):
 		Args:
 			id (int): The ID of the reminder to remove
 		"""
+		ephemeral = not isinstance(interaction.user,discord.User) and interaction.user.resolved_permissions is not None and not interaction.user.resolved_permissions.embed_links
+		await interaction.response.defer(ephemeral=ephemeral)
 		embed = discord.Embed()
 		try:
 			await remind.remove_remind(user=interaction.user.id,id=id)
@@ -293,7 +305,7 @@ class RemindCog(commands.GroupCog,name='reminder'):
 			embed.title = "Couldn't remove reminder"
 			embed.description = str(e)
 			embed.colour = discord.Colour.red()
-		await interaction.response.send_message(embed=embed)
+		await interaction.followup.send(embed=embed)
 
 	@app_commands.command(name='check')
 	@app_commands.autocomplete(id=reminder_autocomplete)
@@ -340,6 +352,8 @@ class RemindCog(commands.GroupCog,name='reminder'):
 			hours (int, optional): New hours to wait.
 			minutes (int, optional): New minutes to wait.
 		"""
+		ephemeral = not isinstance(interaction.user,discord.User) and interaction.user.resolved_permissions is not None and not interaction.user.resolved_permissions.embed_links
+		await interaction.response.defer(ephemeral=ephemeral)
 		embed = discord.Embed()
 		try:
 			if ((days*86400) + (hours*3600) + (minutes*60)) <= 0:
@@ -356,7 +370,7 @@ class RemindCog(commands.GroupCog,name='reminder'):
 			embed.description = str(e)
 			embed.colour = discord.Colour.red()
 			view = discord.utils.MISSING
-		await interaction.response.send_message(embed=embed)
+		await interaction.followup.send(embed=embed)
 		if isinstance(view,ui.View):
 			view.message = await interaction.original_response() #type: ignore
 

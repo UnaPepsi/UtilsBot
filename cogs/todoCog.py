@@ -151,6 +151,9 @@ class TodoRemoveView(ui.View):
 			try: await self.message.edit(view=None)
 			except discord.NotFound: ...
 
+#Never have I ever known you could add decorators to classes... lol
+@app_commands.allowed_installs(guilds=True,users=True)
+@app_commands.allowed_contexts(guilds=True,dms=True,private_channels=True)
 class TODOCog(commands.GroupCog,name='task'):
 	def __init__(self, bot: commands.Bot):
 		self.bot = bot
@@ -168,7 +171,8 @@ class TODOCog(commands.GroupCog,name='task'):
 		Args:
 			reason (str): The reason of your task
 		"""
-		await interaction.response.defer()
+		ephemeral = not isinstance(interaction.user,discord.User) and interaction.user.resolved_permissions is not None and not interaction.user.resolved_permissions.embed_links
+		await interaction.response.defer(ephemeral=ephemeral)
 		embed = discord.Embed()
 		async with TodoDB() as todo:
 			try:
@@ -198,7 +202,8 @@ class TODOCog(commands.GroupCog,name='task'):
 		Args:
 			id (int): The ID of your task to remove
 		"""
-		await interaction.response.defer()
+		ephemeral = not isinstance(interaction.user,discord.User) and interaction.user.resolved_permissions is not None and not interaction.user.resolved_permissions.embed_links
+		await interaction.response.defer(ephemeral=ephemeral)
 		embed = discord.Embed()
 		async with TodoDB() as todo:
 			try:

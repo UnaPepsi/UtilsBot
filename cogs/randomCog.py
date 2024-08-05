@@ -19,6 +19,8 @@ class RandomCog(commands.Cog):
 	async def on_ready(self):
 		logger.info(f'Logged in as {self.bot.user}. Bot in {len(self.bot.guilds)} guilds')
 
+	@app_commands.allowed_installs(guilds=True,users=True)
+	@app_commands.allowed_contexts(guilds=True,dms=True,private_channels=True)
 	@app_commands.checks.cooldown(2,5,key=lambda i: i.user.id)
 	@app_commands.command(name='bypassurl')
 	async def bypassurl(self, interaction: discord.Interaction, url: str):
@@ -27,7 +29,7 @@ class RandomCog(commands.Cog):
 		Args:
 			url (str): The URL to unshorten
 		"""
-		await interaction.response.defer()
+		await interaction.response.defer(ephemeral=not interaction.is_guild_integration() and bool(interaction.guild))
 		try:
 			await interaction.followup.send(await bypass(url))
 		except (KeyError,TimeoutError):
@@ -35,6 +37,8 @@ class RandomCog(commands.Cog):
 		except ValueError:
 			await interaction.followup.send('Invalid URL')
 
+	@app_commands.allowed_installs(guilds=True,users=True)
+	@app_commands.allowed_contexts(guilds=True,dms=True,private_channels=True)
 	@app_commands.command(name='pfp')
 	async def pfp(self, interaction: discord.Interaction, user: discord.User):
 		"""Shows someone's profile picture
@@ -48,6 +52,8 @@ class RandomCog(commands.Cog):
 		embed.set_image(url=user.display_avatar.url)
 		await interaction.response.send_message(embed=embed)
 
+	@app_commands.allowed_installs(guilds=True,users=True)
+	@app_commands.allowed_contexts(guilds=True,dms=True,private_channels=True)
 	@app_commands.checks.cooldown(2,5,key=lambda i: i.user.id)
 	@app_commands.command(name='suggestion')
 	async def suggest(self, interaction: discord.Interaction, suggestion: str):
@@ -57,17 +63,19 @@ class RandomCog(commands.Cog):
 			suggestion (str): The suggestion to give
 		"""
 		if len(suggestion) > 4000:
-			await interaction.response.send_message("A suggestion can't be larger than 4000 characters :<")
+			await interaction.response.send_message("A suggestion can't be larger than 4000 characters :<",ephemeral=True)
 			return
 		owner = await self.bot.fetch_user(624277615951216643)
-		dm_channel = await owner.create_dm()
 		embed = discord.Embed(
-			title = f'New suggestion!',
-			description=suggestion,color=discord.Colour.green())
+			title = 'New suggestion!',
+			description=suggestion,
+			color=discord.Colour.green())
 		embed.add_field(name='Author:',value=f'{interaction.user.mention}')
-		await dm_channel.send(embed=embed)
+		await owner.send(embed=embed)
 		await interaction.response.send_message('Suggestion sent. Thank you :D',ephemeral=True)
 	
+	@app_commands.allowed_installs(guilds=True,users=True)
+	@app_commands.allowed_contexts(guilds=True,dms=True,private_channels=True)
 	@app_commands.checks.cooldown(2,12,key=lambda i: i.user.id)
 	@app_commands.command(name='screenshot')
 	@app_commands.choices()
@@ -83,7 +91,8 @@ class RandomCog(commands.Cog):
 		if isinstance(interaction.channel,(discord.DMChannel,discord.GroupChannel)) or not interaction.channel.is_nsfw():
 			await interaction.response.send_message('This command is only available for channels with NSFW enabled')
 			return
-		await interaction.response.defer()
+		ephemeral = not isinstance(interaction.user,discord.User) and interaction.user.resolved_permissions is not None and not interaction.user.resolved_permissions.embed_links
+		await interaction.response.defer(ephemeral=ephemeral)
 		height = int(resolution[:-1])
 		width = int(height*(16/9))
 		try:
@@ -110,6 +119,7 @@ class RandomCog(commands.Cog):
 	async def reload_module(self, ctx: commands.Context):
 		if ctx.author.id != 624277615951216643:
 			return
+		logger.info('Attempting to reload everything')
 		await ctx.send('trying')
 		start = perf_counter()
 		for item in ['cogs','utils']:
@@ -128,10 +138,11 @@ class RandomCog(commands.Cog):
 			logger.warning(f'{ctx.author.id} somehow got here')
 			return
 		async def rl_ext(ext: str) -> None:
+			logger.info(f'Attempting to reload extension: {ext}')
 			try:
 				await self.bot.reload_extension('cogs.'+ext)
 				await ctx.send(f'Reloaded {ext}')
-			except commands.ExtensionNotFound:
+			except (commands.ExtensionNotFound,commands.ExtensionNotLoaded):
 				await ctx.send(f"Couldn't reload {ext}. Typo?")
 		if ext == 'all':
 			for file in os.listdir('cogs'):

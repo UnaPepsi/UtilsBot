@@ -333,6 +333,8 @@ class SaveEmbed(discord.ui.Modal,title='Saves the embed!'):
 		except TooManyEmbeds:
 			await interaction.response.send_message("You have reached the limit of embeds you can have",ephemeral=True)
 
+@app_commands.allowed_installs(guilds=True,users=True)
+@app_commands.allowed_contexts(guilds=True,dms=True,private_channels=True)
 class CECog(commands.GroupCog,name='embed'):
 	def __init__(self, bot: commands.Bot):
 		self.bot = bot
@@ -370,6 +372,9 @@ class CECog(commands.GroupCog,name='embed'):
 			tag (str): The tag of your saved embed
 			public (bool): Wheter the embed should stick to your command interaction
 		"""
+		if not public and not interaction.is_guild_integration() and interaction.guild:
+			await interaction.response.send_message('For `public` to be false, you must run this command in a server where I am',ephemeral=True)
+			return
 		if interaction.channel is None or isinstance(interaction.channel,(discord.ForumChannel,discord.CategoryChannel)):
 			await interaction.response.send_message('Something wrong happened',ephemeral=True)
 			return
