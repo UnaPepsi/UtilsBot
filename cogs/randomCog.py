@@ -4,17 +4,56 @@ from discord import app_commands
 from discord.ext import commands
 from utils.bypassUrl import bypass
 from utils.websiteSS import get_ss, BadURL, BadResponse
+from utils.dearrow import dearrow, VideoNotFound
 from typing import Literal
 import os
 import logging
 from time import perf_counter
 from asyncio import TimeoutError
+import re
+from io import BytesIO
 logger = logging.getLogger(__name__)
 
 class RandomCog(commands.Cog):
 	def __init__(self, bot: commands.Bot):
 		self.bot = bot
+		self.ctx_menu = app_commands.ContextMenu(
+			name = 'Remove clickbait',
+			callback = self.remove_clickbait
+		)
+		self.bot.tree.add_command(self.ctx_menu)
 	
+	async def cog_unload(self):
+		self.bot.tree.remove_command(self.ctx_menu.name,type=self.ctx_menu.type)
+	
+	@app_commands.checks.cooldown(2,5,key=lambda i: i.user.id)
+	async def remove_clickbait(self, interaction: discord.Interaction, msg: discord.Message):
+		if (vid_re := re.search(r'(?P<url>http(s)?:\/\/(w{3}\.)?(youtu.be\/|youtube.com\/watch\?v=))(?P<video_id>.*)',msg.content)) is None:
+			await interaction.response.send_message(
+			'Message must contain a valid YouTube video link. Example links:\n'
+			'`https://www.youtube.com/watch?v=6NQHtVrP3gE\n'+
+			'https://youtu.be/6NQHtVrP3gE`')
+			return
+		await interaction.response.defer()
+		try:
+			d = await dearrow(vid_re.group('video_id'))
+		except VideoNotFound:
+			await interaction.followup.send("[DeArrow's API](<https://dearrow.ajay.app/>) could not find that video. _Most likely no one sumbitted this video to their API_")
+			return
+		embed = discord.Embed(
+			title=d.title or 'No video title found',
+			description=f'Original Message: {msg.jump_url}',
+			url=vid_re.group('url')+vid_re.group('video_id'),
+			color=0xff0000)
+		file = discord.utils.MISSING
+		if d.thumbnail is not None:
+			embed.set_image(url='attachment://image.png')
+			file = discord.File(BytesIO(d.thumbnail),filename='image.png')
+		else:
+			embed.set_footer(text="No thumbnail found or hasn't been processed yet")
+		embed.set_author(name='Attempt on removing clickbait. Using DeArrow API',url='https://dearrow.ajay.app/',icon_url='http://fun.guimx.me/r/9CPk7o.png?compress=false')
+		await interaction.followup.send(embed=embed,file=file)
+
 	@commands.Cog.listener()
 	async def on_ready(self):
 		logger.info(f'Logged in as {self.bot.user}. Bot in {len(self.bot.guilds)} guilds')
@@ -78,7 +117,6 @@ class RandomCog(commands.Cog):
 	@app_commands.allowed_contexts(guilds=True,dms=True,private_channels=True)
 	@app_commands.checks.cooldown(2,12,key=lambda i: i.user.id)
 	@app_commands.command(name='screenshot')
-	@app_commands.choices()
 	async def screenshot(self, interaction: discord.Interaction, link: str,
 					resolution: Literal['240p','360p','480p','720p','1080p','1440p','2160p'] = '1080p'):
 		"""Takes a screenshot of a given website
