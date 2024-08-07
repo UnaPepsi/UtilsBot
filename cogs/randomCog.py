@@ -37,8 +37,8 @@ class RandomCog(commands.Cog):
 		await interaction.response.defer()
 		try:
 			d = await dearrow(vid_re.group('video_id'))
-		except VideoNotFound:
-			await interaction.followup.send("[DeArrow's API](<https://dearrow.ajay.app/>) could not find that video. _Most likely no one sumbitted this video to their API_")
+		except VideoNotFound as e:
+			await interaction.followup.send(str(e))
 			return
 		embed = discord.Embed(
 			title=d.title or 'No video title found',
