@@ -31,7 +31,7 @@ discord.utils.setup_logging(handler=console_handler)
 
 class UtilsBot(commands.Bot):
 	def __init__(self,intents: Intents,activity: Optional[BaseActivity] = None) -> None:
-		super().__init__(command_prefix=commands.when_mentioned_or('ub'),intents=intents,activity=activity)
+		super().__init__(command_prefix=commands.when_mentioned_or('ub'),intents=intents,activity=activity,help_command=None)
 	
 	async def setup_hook(self) -> None:
 		tasks = []

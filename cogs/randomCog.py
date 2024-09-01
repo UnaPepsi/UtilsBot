@@ -5,6 +5,7 @@ from discord.ext import commands
 from utils.bypassUrl import bypass
 from utils.websiteSS import get_ss, BadURL, BadResponse
 from utils.dearrow import dearrow, VideoNotFound
+from utils import animalapi
 from typing import Literal
 import os
 import logging
@@ -21,12 +22,16 @@ class RandomCog(commands.Cog):
 			name = 'Remove clickbait',
 			callback = self.remove_clickbait
 		)
+		@self.ctx_menu.error
+		async def ctx_menu_error(interaction, error):
+			await self.cog_app_command_error(interaction,error)
+
 		self.bot.tree.add_command(self.ctx_menu)
 	
 	async def cog_unload(self):
 		self.bot.tree.remove_command(self.ctx_menu.name,type=self.ctx_menu.type)
 	
-	@app_commands.checks.cooldown(2,5,key=lambda i: i.user.id)
+	@app_commands.checks.cooldown(2,10,key=lambda i: i.user.id)
 	async def remove_clickbait(self, interaction: discord.Interaction, msg: discord.Message):
 		if (vid_re := re.search(r'(?P<url>http(s)?:\/\/(w{3}\.)?(youtu.be\/|youtube.com\/watch\?v=))(?P<video_id>.*)',msg.content)) is None:
 			await interaction.response.send_message(
@@ -147,6 +152,40 @@ class RandomCog(commands.Cog):
 			embed.set_footer(text=f"If the resolution is not the one specified, it's because I couldn't screenshot normally :<")
 			embed.set_image(url='attachment://image.png')
 			await interaction.followup.send(file=discord.File(fbytes,filename='image.png'),embed=embed)
+
+	@app_commands.allowed_installs(guilds=True,users=True)
+	@app_commands.allowed_contexts(guilds=True,dms=True,private_channels=True)
+	@app_commands.checks.cooldown(2,12,key=lambda i: i.user.id)
+	@app_commands.command(name='cat')
+	async def cat(self, interaction: discord.Interaction):
+		"""Looks for a picture of a cat"""
+		try:
+			image_url = await animalapi.get_cat()
+			embed = discord.Embed(
+					title='Found cat!',
+					color=discord.Color.random()
+				)
+			embed.set_image(url=image_url)
+			await interaction.response.send_message(embed=embed)
+		except animalapi.Error as e:
+			await interaction.response.send_message(str(e),ephemeral=True)
+
+	@app_commands.allowed_installs(guilds=True,users=True)
+	@app_commands.allowed_contexts(guilds=True,dms=True,private_channels=True)
+	@app_commands.checks.cooldown(2,12,key=lambda i: i.user.id)
+	@app_commands.command(name='dog')
+	async def dog(self, interaction: discord.Interaction):
+		"""Looks for a picture of a dog"""
+		try:
+			image_url = await animalapi.get_dog()
+			embed = discord.Embed(
+					title='Found dog!',
+					color=discord.Color.random()
+				)
+			embed.set_image(url=image_url)
+			await interaction.response.send_message(embed=embed)
+		except animalapi.Error as e:
+			await interaction.response.send_message(str(e),ephemeral=True)
 
 	async def cog_app_command_error(self, interaction: discord.Interaction, error: app_commands.AppCommandError):
 		if isinstance(error, discord.app_commands.errors.CommandOnCooldown):

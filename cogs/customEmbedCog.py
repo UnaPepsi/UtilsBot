@@ -3,7 +3,7 @@ from discord import app_commands
 from discord.ext import commands
 import re
 from datetime import datetime
-from typing import Union, Optional, Any
+from typing import Union, Optional, Any, List
 from utils.customEmbed import CustomEmbed, BadTag, TagInUse, TooManyEmbeds
 from utils import sm_utils
 import time
@@ -29,6 +29,16 @@ default_embed.add_field(name='Thumbnail',value='The small `GIF` is the `Thumbnai
 default_embed.add_field(name='Inline',value='You can have up to `3 fields` in the `same line`!')
 default_embed.add_field(name='Fields',value='You can have up to `25 fields` in total!')
 default_embed.add_field(name='Size',value='Embeds can have up to `6000 total characters`')
+
+async def embed_autocomplete(interaction: discord.Interaction, current: str) -> List[app_commands.Choice[str]]:
+	async with CustomEmbed() as ce:
+		tags_found = await ce.load_autocomplete(user=interaction.user.id,tag=current)
+	if tags_found is None:
+		return []
+	return [
+		app_commands.Choice(name=tag, value=tag)
+		for tag in tags_found
+	]
 
 async def size_check(embed: discord.Embed, *args) -> bool:
 	embed_size = len(embed.title or '')+len(embed.description or '')+len(embed.author.name or '')+len(embed.footer.text or '')
@@ -110,6 +120,12 @@ class EmbedMaker(discord.ui.View):
 			await interaction.response.send_message("You're not allowed to do that",ephemeral=True)
 			return
 		await interaction.response.send_modal(SaveEmbed())
+	@discord.ui.button(label='Clear',style=discord.ButtonStyle.danger)
+	async def clear_embed(self, interaction: discord.Interaction, button: discord.ui.Button):
+		if interaction.user.id != self.user_embed.id:
+			await interaction.response.send_message("You're not allowed to do that",ephemeral=True)
+			return
+		await interaction.response.edit_message(embed=discord.Embed(description='Empty embed'),view=self)
 class EmbedFields:
 	class AddField(discord.ui.Modal,title='Add a field!'):
 		name_ = discord.ui.TextInput(
@@ -349,6 +365,7 @@ class CECog(commands.GroupCog,name='embed'):
 	async def create_embed(self, interaction: discord.Interaction):
 		await interaction.response.send_message(embed=default_embed,view=EmbedMaker(interaction.user))
 	
+	@app_commands.autocomplete(tag=embed_autocomplete)
 	@app_commands.command(name='remove')
 	async def delete_embed(self, interaction: discord.Interaction, tag: str):
 		"""Removes a previously saved embed
@@ -363,6 +380,7 @@ class CECog(commands.GroupCog,name='embed'):
 			except BadTag:
 				await interaction.response.send_message(f'No embed with tag {tag} found',ephemeral=True)
 	
+	@app_commands.autocomplete(tag=embed_autocomplete)
 	@app_commands.checks.has_permissions(manage_messages=True)
 	@app_commands.command(name='send')
 	async def send_embed(self, interaction: discord.Interaction, tag: str, public: bool):
@@ -392,16 +410,6 @@ class CECog(commands.GroupCog,name='embed'):
 				await interaction.response.send_message('Embed sent',ephemeral=True)
 			except discord.Forbidden:
 				await interaction.response.send_message("Couldn't send embed, check my permissions",ephemeral=True)
-	@send_embed.autocomplete('tag')
-	async def autocomplete_send_embed(self, interaction: discord.Interaction, current: str):
-		async with CustomEmbed() as ce:
-			tags_found = await ce.load_autocomplete(user=interaction.user.id,tag=current)
-		if tags_found is None:
-			return []
-		return [
-			app_commands.Choice(name=tag, value=tag)
-			for tag in tags_found
-    	]
 
 	async def cog_app_command_error(self, interaction: discord.Interaction, error: app_commands.AppCommandError):
 		if isinstance(error,discord.app_commands.MissingPermissions):

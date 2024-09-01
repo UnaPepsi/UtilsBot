@@ -356,11 +356,9 @@ class RemindCog(commands.GroupCog,name='reminder'):
 		await interaction.response.defer(ephemeral=ephemeral)
 		embed = discord.Embed()
 		try:
-			if ((days*86400) + (hours*3600) + (minutes*60)) <= 0:
-				raise remind.BadReminder("You need to specify a valid time for the reminder")
 			items = await remind.edit_remind(user=interaction.user.id,id=id,reason=reason,days=days,hours=hours,minutes=minutes)
 			embed.title = f"Edited reminder of id {id}"
-			embed.description = f'This reminder will fire at <t:{items.timestamp}>\nWith reason **{items.timestamp}**'
+			embed.description = f'This reminder will fire at <t:{items.timestamp}>\nWith reason **{items.reason}**'
 			embed.colour = discord.Colour.green()
 			view = ui.View(timeout=360)
 			view.add_item(DeleteReminder(user=interaction.user.id,id=id))
