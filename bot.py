@@ -39,13 +39,14 @@ class UtilsBot(commands.Bot):
 			if item.endswith('.py'):
 				tasks.append(asyncio.create_task(self.load_extensions(f'cogs.{item.strip(".py")}')))
 		asyncio.gather(*tasks)
+		await self.load_extension('jishaku')
 		self.add_dynamic_items(GiveawayJoinDynamicButton)
 	
 	async def load_extensions(self, ext: str) -> None:
 		await self.load_extension(ext)
 
 	async def on_command_error(self, ctx: commands.Context, error: commands.CommandError) -> None:
-		if isinstance(error, commands.CommandNotFound):
+		if isinstance(error, (commands.CommandNotFound,commands.NotOwner)):
 			return
 		else: raise error
 

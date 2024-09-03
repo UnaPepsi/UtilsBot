@@ -7,7 +7,7 @@ from typing import Union, Optional, Any, List
 from utils.customEmbed import CustomEmbed, BadTag, TagInUse, TooManyEmbeds
 from utils import sm_utils
 import time
-from ast import literal_eval
+import json
 import logging
 logger = logging.getLogger(__name__)
 
@@ -316,7 +316,7 @@ class EmbedPrompt(discord.ui.Modal,title='Edit the embed!'):
 			try:  color_sel = sm_utils.hex_colors[self.color_.value] if self.color_.value in list(sm_utils.hex_colors) else int(self.color_.value[1:],16)
 			except ValueError: color_sel = None
 			try: color_sel = sm_utils.rgb_to_hex(*self.color_.value.split(',',3))
-			except TypeError: ...
+			except (TypeError,ValueError): ...
 		else: color_sel = int(self.color_.value)
 		try: embed = interaction.message.embeds[0] if interaction.message is not None else [][0]
 		except IndexError: await interaction.response.send_message("Somthing wrong happened",ephemeral=True);return
@@ -340,7 +340,7 @@ class SaveEmbed(discord.ui.Modal,title='Saves the embed!'):
 		try:
 			if interaction.message is None: raise IndexError
 			async with CustomEmbed() as ce:
-				await ce.new_embed(user=interaction.user.id,tag=self.tag.value,embed=interaction.message.embeds[0].to_dict()) #type: ignore
+				await ce.new_embed(user=interaction.user.id,tag=self.tag.value,embed=json.dumps(interaction.message.embeds[0].to_dict()))
 			await interaction.response.send_message(f"Embed saved with tag {self.tag.value}",ephemeral=True)
 		except IndexError:
 			await interaction.response.send_message("Something wrong happened",ephemeral=True)
@@ -361,8 +361,9 @@ class CECog(commands.GroupCog,name='embed'):
 		logger.info('CustomEmbed table created')
 
 	@app_commands.command(name='create',description='Creates a custom embed!')
-	@app_commands.checks.has_permissions(manage_messages=True)
 	async def create_embed(self, interaction: discord.Interaction):
+		if isinstance(interaction.user,discord.Member) and (not interaction.user.resolved_permissions or not interaction.user.resolved_permissions.manage_messages):
+			raise app_commands.MissingPermissions(['manage_messages'])
 		await interaction.response.send_message(embed=default_embed,view=EmbedMaker(interaction.user))
 	
 	@app_commands.autocomplete(tag=embed_autocomplete)
@@ -381,7 +382,6 @@ class CECog(commands.GroupCog,name='embed'):
 				await interaction.response.send_message(f'No embed with tag {tag} found',ephemeral=True)
 	
 	@app_commands.autocomplete(tag=embed_autocomplete)
-	@app_commands.checks.has_permissions(manage_messages=True)
 	@app_commands.command(name='send')
 	async def send_embed(self, interaction: discord.Interaction, tag: str, public: bool):
 		"""Sends a saved embed!
@@ -390,9 +390,12 @@ class CECog(commands.GroupCog,name='embed'):
 			tag (str): The tag of your saved embed
 			public (bool): Wheter the embed should stick to your command interaction
 		"""
-		if not public and not interaction.is_guild_integration() and interaction.guild:
+		if not public and not interaction.is_guild_integration():
 			await interaction.response.send_message('For `public` to be false, you must run this command in a server where I am',ephemeral=True)
 			return
+		if isinstance(interaction.user,discord.Member) and (not interaction.user.resolved_permissions or not interaction.user.resolved_permissions.manage_messages):
+			raise app_commands.MissingPermissions(['manage_messages'])
+			
 		if interaction.channel is None or isinstance(interaction.channel,(discord.ForumChannel,discord.CategoryChannel)):
 			await interaction.response.send_message('Something wrong happened',ephemeral=True)
 			return
@@ -401,7 +404,7 @@ class CECog(commands.GroupCog,name='embed'):
 			if plain_embed is None:
 				await interaction.response.send_message(f'No embed with tag {tag} found',ephemeral=True)
 				return
-		embed = discord.Embed.from_dict(literal_eval(plain_embed))
+		embed = discord.Embed.from_dict(json.loads(plain_embed))
 		if public:
 			await interaction.response.send_message(embed=embed)
 		else:

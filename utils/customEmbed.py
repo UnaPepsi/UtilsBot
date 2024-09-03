@@ -28,7 +28,7 @@ class CustomEmbed:
 			embed TEXT
 		)
 		""")
-	async def new_embed(self,user: int, tag: str, embed: Dict[Any,Any]) -> None:
+	async def new_embed(self,user: int, tag: str, embed: str) -> None:
 		if await self.load_embed(user=user,tag=tag) is not None:
 			raise TagInUse('Tag already in use')
 		if await self.embeds_amount(user=user) >= 10:
