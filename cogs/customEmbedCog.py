@@ -64,12 +64,6 @@ class EmbedMaker(discord.ui.View):
 			discord.SelectOption(label='Footer',emoji='\N{FOOT}',description='Edits the footer',value='footer'),
 		])
 	async def dropdown_menu(self, interaction: discord.Interaction, select: discord.ui.Select):
-		if isinstance(interaction.user,discord.User):
-			await interaction.response.send_message('Something wrong happened :(',ephemeral=True)
-			return
-		if not interaction.user.guild_permissions.manage_messages:
-			await interaction.response.send_message("You're not allowed to do that",ephemeral=True)
-			return
 		if interaction.user.id != self.user_embed.id:
 			await interaction.response.send_message("You're not allowed to do that",ephemeral=True)
 			return
@@ -112,7 +106,8 @@ class EmbedMaker(discord.ui.View):
 		if interaction.message is None:
 			await interaction.response.send_message('Something went wrong :(',ephemeral=True)
 			return
-		await interaction.message.edit(view=self)
+		if interaction.guild:
+			await interaction.message.edit(view=self)
 		await interaction.response.send_modal(options[select.values[0]])
 	@discord.ui.button(label='Save',style=discord.ButtonStyle.green)
 	async def save(self, interaction: discord.Interaction, button: discord.ui.Button):
