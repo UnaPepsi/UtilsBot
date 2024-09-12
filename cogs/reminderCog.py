@@ -2,7 +2,7 @@ import discord
 from discord import app_commands, ui
 from discord.ext import commands,tasks
 import asyncio
-from utils import remind
+from utils import remind, sm_utils
 from time import time
 import logging
 from typing import Optional, List
@@ -127,7 +127,7 @@ class Snooze(ui.Button):
 			self.view_.add_item(ui.Button(style=discord.ButtonStyle.green,label=f"Snooze for 10 minutes",disabled=True))
 			embed = discord.Embed()
 			try:
-				values = await remind.add_remind(user=self.original_user_id,channel_id=interaction.channel_id,reason=self.reason,days=0,hours=0,minutes=self.minutes_added)
+				values = await remind.add_remind(user=self.original_user_id,channel_id=interaction.channel_id,reason=self.reason,timestamp=int(time()+self.minutes_added*60))
 				embed.title = "Reminder snoozed!"
 				embed.description = f"Reminder for <t:{values.timestamp}> of id **{values.id}**\nwith reason **\"{self.reason}\"** added successfully"
 				embed.colour = discord.Colour.green()
@@ -170,11 +170,64 @@ class DeleteReminder(ui.Button):
 			embed.colour = discord.Colour.red()
 		await interaction.response.edit_message(embed=embed,view=None)
 
+class SetReminderModal(ui.Modal,title='Set a reminder for this message'):
+	_reason = ui.TextInput(
+			label = 'Reason',style=discord.TextStyle.short,
+			placeholder='Remind to publish this message...',required=True,
+			max_length=500
+		)
+	_when = ui.TextInput(
+			label = 'When',style=discord.TextStyle.short,
+			placeholder='Use formats such as: 1h30m, 2hours 5m',required=True,
+			max_length=15
+		)
+	def __init__(self, msg: discord.Message):
+		super().__init__()
+		self.msg = msg
+
+	async def on_submit(self, interaction: discord.Interaction):
+		if interaction.channel is None: return
+		await interaction.response.defer(thinking=True)
+		embed = discord.Embed()
+		try:
+			timestamp = int(sm_utils.parse_duration(self._when.value).total_seconds() + time())
+			if (time() > timestamp):
+				raise remind.BadReminder("You need to specify a valid time for the reminder")
+			values = await remind.add_remind(user=interaction.user.id,channel_id=interaction.channel.id,
+									reason=self._reason.value,timestamp=timestamp,jump_url=self.msg.jump_url)
+			embed.title = "Reminder created!"
+			embed.description = f"Reminder for <t:{values.timestamp}> (<t:{values.timestamp}:R>) of id **{values.id}**\nwith reason **\"{values.reason}\"** added successfully"
+			embed.colour = discord.Colour.green()
+			view = ui.View(timeout=360)
+			view.add_item(DeleteReminder(user=interaction.user.id,id=values.id))
+			view.on_timeout = lambda : view.message.edit(view=None) #type: ignore
+		except remind.BadReminder as e:
+			embed.title = "Reminder failed"
+			embed.description = str(e)
+			embed.colour = discord.Colour.red()
+			view = discord.utils.MISSING
+		await interaction.followup.send(embed=embed,view=view)
+		if isinstance(view,ui.View):
+			view.message = await interaction.original_response() #type: ignore
+
 @app_commands.allowed_installs(guilds=True,users=True)
 @app_commands.allowed_contexts(guilds=True,dms=True,private_channels=True)
 class RemindCog(commands.GroupCog,name='reminder'):
 	def __init__(self, bot: commands.Bot):
 		self.bot = bot
+		self.ctx_menu = app_commands.ContextMenu(
+			name = 'Set reminder for...',
+			callback = self.ctx_menu_add_reminder
+		)
+		@self.ctx_menu.error
+		async def ctx_menu_error(interaction, error):
+			logger.error(f"Error in ctx_menu: {error}")
+
+		self.bot.tree.add_command(self.ctx_menu)
+		
+	@app_commands.checks.cooldown(2,10,key=lambda i: i.user.id)
+	async def ctx_menu_add_reminder(self, interaction: discord.Interaction, msg: discord.Message):
+		await interaction.response.send_modal(SetReminderModal(msg=msg))
 
 	async def cog_load(self):
 		async with remind.Reader() as f:
@@ -185,6 +238,7 @@ class RemindCog(commands.GroupCog,name='reminder'):
 	async def cog_unload(self):
 		self.loop_check.cancel()
 		logger.info('Cancelling reminder loop check')
+		self.bot.tree.remove_command(self.ctx_menu.name,type=self.ctx_menu.type)
 
 	@tasks.loop(seconds=10)
 	async def loop_check(self):
@@ -208,6 +262,8 @@ class RemindCog(commands.GroupCog,name='reminder'):
 			description= f'Reason of your reminder: **{item.reason}**',
 			colour=discord.Colour.green()
 		)
+		if item.jump_url:
+			embed.description += f'\nMessage origin of reminder: {item.jump_url}' #type: ignore
 		try:
 			channel = await self.bot.fetch_channel(item.channel)
 			view.message = await channel.send(f'<@{item.user}>',embed=embed,view=view) #type: ignore
@@ -243,14 +299,12 @@ class RemindCog(commands.GroupCog,name='reminder'):
 
 	@app_commands.checks.cooldown(2,7,key=lambda i: i.user.id)
 	@app_commands.command(name='add')
-	async def add_reminder(self, interaction: discord.Interaction,reason: str,days: int = 0,hours: int = 0, minutes: int = 0):
+	async def add_reminder(self, interaction: discord.Interaction,reason: str, when: str):
 		"""Adds a reminder
 
 		Args:
 			reason (str): Your reminder's reason
-			days (int, optional): Days to wait. Defaults to 0.
-			hours (int, optional): Hours to wait. Defaults to 0.
-			minutes (int, optional): Minutes to wait. Defaults to 0.
+			when (str): When to remind you (e.g. 1d3h 5m30s 1w5d)
 		"""
 		ephemeral = not isinstance(interaction.user,discord.User) and interaction.user.resolved_permissions is not None and not interaction.user.resolved_permissions.embed_links
 		await interaction.response.defer(ephemeral=ephemeral)
@@ -260,11 +314,12 @@ class RemindCog(commands.GroupCog,name='reminder'):
 			channel_id = interaction.user.dm_channel.id if interaction.user.dm_channel is not None else (await interaction.user.create_dm()).id
 		embed = discord.Embed()
 		try:
-			if ((days*86400) + (hours*3600) + (minutes*60)) <= 0:
+			timestamp = int(sm_utils.parse_duration(when).total_seconds() + time())
+			if (time() > timestamp):
 				raise remind.BadReminder("You need to specify a valid time for the reminder")
-			values = await remind.add_remind(user=interaction.user.id,channel_id=channel_id,reason=reason,days=days,hours=hours,minutes=minutes)
+			values = await remind.add_remind(user=interaction.user.id,channel_id=channel_id,reason=reason,timestamp=timestamp)
 			embed.title = "Reminder created!"
-			embed.description = f"Reminder for <t:{values.timestamp}> of id **{values.id}**\nwith reason **\"{reason}\"** added successfully"
+			embed.description = f"Reminder for <t:{values.timestamp}> (<t:{values.timestamp}:R>) of id **{values.id}**\nwith reason **\"{reason}\"** added successfully"
 			embed.colour = discord.Colour.green()
 			if not interaction.is_guild_integration() and interaction.guild:
 				embed.set_footer(text='Because this bot is not in this server, the reminder will be sent in your DMs')
@@ -320,7 +375,7 @@ class RemindCog(commands.GroupCog,name='reminder'):
 		try:
 			items = await remind.check_remind(user=interaction.user.id,id=id)
 			embed.title = f"Found reminder of ID {id}!"
-			embed.description = f'This reminder will fire at <t:{items.timestamp}>\nWith reason **{items.reason}**'
+			embed.description = f'This reminder will fire at <t:{items.timestamp}> (<t:{items.timestamp}:R>)\nWith reason **{items.reason}**'
 			embed.colour = discord.Colour.green()
 		except remind.ReminderNotValid as e:
 			# print(e,type(e),eval(str(e)))
@@ -342,23 +397,28 @@ class RemindCog(commands.GroupCog,name='reminder'):
 
 	@app_commands.command(name='edit')
 	@app_commands.autocomplete(id=reminder_autocomplete)
-	async def edit_reminder(self, interaction: discord.Interaction, id: int, reason: str = '', days: int = 0, hours: int = 0, minutes: int = 0):
+	async def edit_reminder(self, interaction: discord.Interaction, id: int, reason: str = '', when: str = ''):
 		"""Edits a reminder given the ID
 
 		Args:
 			id (int): The ID of the reminder to edit
 			reason (str, optional): New reason for the reminder.
-			days (int, optional): New days to wait.
-			hours (int, optional): New hours to wait.
-			minutes (int, optional): New minutes to wait.
+			when (str, optional): New time to remind you (e.g. 1d3h 5m30s 1w5d)
 		"""
+		if not reason and not when:
+			await interaction.response.send_message('You must edit one or both of the parameters',ephemeral=True)
+			return
 		ephemeral = not isinstance(interaction.user,discord.User) and interaction.user.resolved_permissions is not None and not interaction.user.resolved_permissions.embed_links
 		await interaction.response.defer(ephemeral=ephemeral)
 		embed = discord.Embed()
 		try:
-			items = await remind.edit_remind(user=interaction.user.id,id=id,reason=reason,days=days,hours=hours,minutes=minutes)
+			if when:
+				timestamp = int(sm_utils.parse_duration(when).total_seconds() + time())
+			else:
+				timestamp = None
+			items = await remind.edit_remind(user=interaction.user.id,id=id,reason=reason,timestamp=timestamp)
 			embed.title = f"Edited reminder of id {id}"
-			embed.description = f'This reminder will fire at <t:{items.timestamp}>\nWith reason **{items.reason}**'
+			embed.description = f'This reminder will fire at <t:{items.timestamp}> (<t:{items.timestamp}:R>)\nWith reason **{items.reason}**'
 			embed.colour = discord.Colour.green()
 			view = ui.View(timeout=360)
 			view.add_item(DeleteReminder(user=interaction.user.id,id=id))

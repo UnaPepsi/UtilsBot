@@ -1,7 +1,7 @@
 import discord
 from discord.ext import commands, tasks
 from discord import app_commands, ui
-from datetime import timedelta, datetime
+from datetime import datetime
 import re
 from utils.giveaway import GiveawayDB, Giveaway, Participant
 from utils import sm_utils
@@ -12,34 +12,6 @@ from utils.userVoted import has_user_voted
 from typing import List, Tuple
 import logging
 logger = logging.getLogger(__name__)
-
-def parse_duration(duration_str: str):
-	pattern = r"""
-		(?:(?P<weeks>[0-9]{1,4})(?:weeks?|w))?                 # e.g. 10w
-		(?:(?P<days>[0-9]{1,5})(?:days?|d))?                   # e.g. 14d
-		(?:(?P<hours>[0-9]{1,5})(?:hours?|hr?s?))?             # e.g. 12h
-		(?:(?P<minutes>[0-9]{1,5})(?:minutes?|m(?:ins?)?))?    # e.g. 10m
-		(?:(?P<seconds>[0-9]{1,5})(?:seconds?|s(?:ecs?)?))?    # e.g. 15s
-	"""
-
-	match = re.match(pattern, duration_str, re.VERBOSE | re.IGNORECASE)
-
-	if match:
-		weeks = int(match.group('weeks')) if match.group('weeks') else 0
-		days = int(match.group('days')) if match.group('days') else 0
-		hours = int(match.group('hours')) if match.group('hours') else 0
-		minutes = int(match.group('minutes')) if match.group('minutes') else 0
-		seconds = int(match.group('seconds')) if match.group('seconds') else 0
-
-		duration = timedelta(
-			days=days + weeks * 7,
-			hours=hours,
-			minutes=minutes,
-			seconds=seconds
-		)
-		return duration
-	else:
-		raise ValueError("Invalid duration format")
 
 class GiveawayJoinDynamicButton(ui.DynamicItem[ui.Button],template=r'giveaway_join:channel_id:(?P<id>[0-9]+)'):
 	def __init__(self, channel_id: int):
@@ -169,7 +141,7 @@ class GiveawayModal(ui.Modal,title='Creates a giveaway!'):
 			if self._duration.value.isdecimal():
 				when = int(self._duration.value)
 			else:
-				try: when = int(parse_duration(self._duration.value).total_seconds())
+				try: when = int(sm_utils.parse_duration(self._duration.value).total_seconds())
 				except ValueError:
 					await interaction.response.send_message('Duration invalid, if keeps failing you could try with a timestamp',ephemeral=True)
 					return

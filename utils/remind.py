@@ -1,15 +1,16 @@
 import time
 import aiosqlite
 from utils.userVoted import has_user_voted
-from typing import List, Self
+from typing import List, Self, Optional
 
 class Reminder:
-	def __init__(self,user: int, timestamp: int, reason: str, channel: int, id: int) -> None:
+	def __init__(self,user: int, timestamp: int, reason: str, channel: int, id: int, jump_url: Optional[str] = None) -> None:
 		self.user = user
 		self.timestamp = timestamp
 		self.reason = reason
 		self.channel = channel
 		self.id = id
+		self.jump_url = jump_url
 
 class BadReminder(Exception): ...
 class ReminderNotValid(BadReminder):
@@ -54,11 +55,12 @@ class Reader:
 	async def make_table(self) -> None:
 		await self.cursor.execute("""
 		CREATE TABLE IF NOT EXISTS usuarios (
-			user INTEGER,
-			timestamp INTEGER,
-			reason TEXT,
-			channel INTEGER,
-			id INTEGER
+			user INTEGER NOT NULL PRIMARY KEY,
+			timestamp INTEGER NOT NULL,
+			reason TEXT NOT NULL,
+			channel INTEGER NOT NULL,
+			id INTEGER NOT NULL,
+			jump_url TEXT
 		)
 		""")
 	
@@ -71,11 +73,11 @@ class Reader:
 		value = await self.cursor.fetchone()
 		return value[0] if value is not None else 0
 	
-	async def new_reminder(self, user: int, id: int, timestamp: int, channel_id: int,reason: str) -> None:
+	async def new_reminder(self, user: int, id: int, timestamp: int, channel_id: int,reason: str, jump_url: Optional[str] = None) -> None:
 		await self.cursor.execute("""
 		INSERT INTO usuarios VALUES
-		(?, ?, ?, ?, ?)
-		""",(user,timestamp,reason,channel_id,id))
+		(?, ?, ?, ?, ?, ?)
+		""",(user,timestamp,reason,channel_id,id,jump_url))
 		await self.connection.commit()
 
 	async def delete_value(self, user: int, id: int) -> None:
@@ -94,7 +96,7 @@ class Reader:
 		""",(timestamp,reason,user,id))
 		await self.connection.commit()
 
-	async def load_remind(self, user: int, id: int) -> Reminder | None:
+	async def load_remind(self, user: int, id: int) -> Optional[Reminder]:
 		await self.cursor.execute("""
 		SELECT * FROM usuarios
 		WHERE user = ? AND id = ?
@@ -110,7 +112,7 @@ class Reader:
 		results = await self.cursor.fetchall()
 		return [result[0] for result in results]
 
-	async def load_timestamp(self,actual_time: int) -> List[Reminder] | None:
+	async def load_timestamp(self,actual_time: int) -> Optional[List[Reminder]]:
 		await self.cursor.execute("""
 		SELECT * FROM usuarios
 		WHERE timestamp - ? < 12
@@ -126,7 +128,7 @@ class Reader:
 		results = await self.cursor.fetchall()
 		return [Reminder(*result) for result in results]
 
-	async def load_all_user_reminders(self, user: int, limit: int = -1) -> List[Reminder] | None:
+	async def load_all_user_reminders(self, user: int, limit: int = -1) -> Optional[List[Reminder]]:
 		await self.cursor.execute("""
 		SELECT * FROM usuarios
 		WHERE user = ? ORDER BY id LIMIT ?
@@ -134,7 +136,7 @@ class Reader:
 		results = await self.cursor.fetchall()
 		return [Reminder(*result) for result in results] if results != [] else None
 	
-	async def load_autocomplete(self, user: int, reason: str, limit: int  =-1) -> List[Reminder] | None:
+	async def load_autocomplete(self, user: int, reason: str, limit: int  =-1) -> Optional[List[Reminder]]:
 		await self.cursor.execute("""
 		SELECT * FROM usuarios
 		WHERE user = ? AND reason LIKE ? LIMIT ?
@@ -142,10 +144,9 @@ class Reader:
 		results = await self.cursor.fetchall()
 		return [Reminder(*result) for result in results] if results != [] else None
 
-async def add_remind(user: int,channel_id: int | None,reason: str, days: int, hours: int, minutes: int) -> Reminder:
+async def add_remind(user: int,channel_id: Optional[int],reason: str, timestamp: int, jump_url: Optional[str] = None) -> Reminder:
 	if channel_id is None:
 		raise TypeError("You must provide a channel_id")
-	timestamp = int(time.time())+(days*86400)+(hours*3600)+(minutes*60)
 	if timestamp - time.time() > 31536000:
 		raise BadReminder("You can't have a reminder with a time longer than a year")
 	if len(reason) > 500:
@@ -159,7 +160,7 @@ async def add_remind(user: int,channel_id: int | None,reason: str, days: int, ho
 		if reminders_amount > 5 and not await has_user_voted(user_id=user):
 			raise BadReminder("You can only have a maximum of 5 reminders at once, to be able to have more reminders consider giving me a [vote](<https://top.gg/bot/778785822828265514/vote>) :D")
 		user_max_id = await f.max_id(user)
-		await f.new_reminder(user=user,id=user_max_id+1,timestamp=timestamp,channel_id=channel_id,reason=reason)
+		await f.new_reminder(user=user,id=user_max_id+1,timestamp=timestamp,channel_id=channel_id,reason=reason,jump_url=jump_url)
 	
 	return Reminder(user,timestamp,reason,channel_id,user_max_id+1)
 
@@ -167,8 +168,9 @@ async def remove_remind(user: int, id: int):
 	async with Reader() as f:
 		await f.delete_value(user=user,id=id)
 
-async def edit_remind(user: int, id: int, days: int = 0, hours: int = 0, minutes: int = 0, reason: str = '') -> Reminder:
-	if (days*86400)+(hours*3600)+(minutes*60) > 31536000:
+async def edit_remind(user: int, id: int, timestamp: Optional[int] = None, reason: str = '') -> Reminder:
+	timestamp = timestamp or int(time.time())
+	if timestamp - time.time() > 31536000:
 		raise BadReminder("You can't have a reminder with a time longer than a year")
 	user_voted = await has_user_voted(user_id=user)
 	if len(reason) > 50 and not user_voted:
@@ -180,7 +182,8 @@ async def edit_remind(user: int, id: int, days: int = 0, hours: int = 0, minutes
 		if value is None:
 			raise BadReminder(f'No reminder of id **{id}** found')
 		reason = value.reason if reason == '' else reason
-		timestamp = value.timestamp if (days + hours + minutes <= 0) else int(time.time())+(days*86400)+(hours*3600)+(minutes*60)
+		if time.time() >= timestamp:
+			timestamp = value.timestamp
 		await f.update_value(user=user,id=id,timestamp=timestamp,reason=reason)
 		new_reminder = await f.load_remind(user=user,id=id)
 		if new_reminder is None:
@@ -204,6 +207,6 @@ async def check_remind_fire() -> List[Reminder]:
 			raise BadReminder('No reminder to fire')
 		return [value for value in values]
 
-async def manual_add(user: int, channel_id: int, reason: str, timestamp: int, id: int):
+async def manual_add(user: int, channel_id: int, reason: str, timestamp: int, id: int, jump_url: Optional[str] = None):
 	async with Reader() as f:
-		await f.new_reminder(user=user,id=id,timestamp=timestamp,reason=reason,channel_id=channel_id)
+		await f.new_reminder(user=user,id=id,timestamp=timestamp,reason=reason,channel_id=channel_id,jump_url=jump_url)

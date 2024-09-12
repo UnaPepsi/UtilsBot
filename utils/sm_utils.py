@@ -1,6 +1,8 @@
 from typing import Any, Callable, Union, List, Dict
 import asyncio
 from io import BytesIO
+import re
+from datetime import timedelta
 
 def format_miss_perms(missing_perms: List[str]) -> str:
 	perms = [perm.replace('_',' ') for perm in missing_perms]
@@ -36,6 +38,34 @@ def rgb_to_hex(r: Union[str,int], g: Union[str,int], b: Union[str,int]) -> int:
     if sum not in range(16777215+1):
         raise TypeError('Invalid RGB')
     return sum
+
+def parse_duration(duration_str: str):
+	pattern = r"""
+		(?:(?P<weeks>[0-9]{1,4})(?:weeks?|w))?                 # e.g. 10w
+		(?:(?P<days>[0-9]{1,5})(?:days?|d))?                   # e.g. 14d
+		(?:(?P<hours>[0-9]{1,5})(?:hours?|hr?s?))?             # e.g. 12h
+		(?:(?P<minutes>[0-9]{1,5})(?:minutes?|m(?:ins?)?))?    # e.g. 10m
+		(?:(?P<seconds>[0-9]{1,5})(?:seconds?|s(?:ecs?)?))?    # e.g. 15s
+	"""
+
+	match = re.match(pattern, duration_str, re.VERBOSE | re.IGNORECASE)
+
+	if match:
+		weeks = int(match.group('weeks')) if match.group('weeks') else 0
+		days = int(match.group('days')) if match.group('days') else 0
+		hours = int(match.group('hours')) if match.group('hours') else 0
+		minutes = int(match.group('minutes')) if match.group('minutes') else 0
+		seconds = int(match.group('seconds')) if match.group('seconds') else 0
+
+		duration = timedelta(
+			days=days + weeks * 7,
+			hours=hours,
+			minutes=minutes,
+			seconds=seconds
+		)
+		return duration
+	else:
+		raise ValueError("Invalid duration format")
 
 hex_colors = {
     "black": 0x000000,
