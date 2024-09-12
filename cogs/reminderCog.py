@@ -219,13 +219,9 @@ class RemindCog(commands.GroupCog,name='reminder'):
 			name = 'Set reminder for...',
 			callback = self.ctx_menu_add_reminder
 		)
-		@self.ctx_menu.error
-		async def ctx_menu_error(interaction, error):
-			logger.error(f"Error in ctx_menu: {error}")
 
 		self.bot.tree.add_command(self.ctx_menu)
 		
-	@app_commands.checks.cooldown(2,10,key=lambda i: i.user.id)
 	async def ctx_menu_add_reminder(self, interaction: discord.Interaction, msg: discord.Message):
 		await interaction.response.send_modal(SetReminderModal(msg=msg))
 
