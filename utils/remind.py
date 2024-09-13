@@ -55,7 +55,7 @@ class Reader:
 	async def make_table(self) -> None:
 		await self.cursor.execute("""
 		CREATE TABLE IF NOT EXISTS usuarios (
-			user INTEGER NOT NULL PRIMARY KEY,
+			user INTEGER NOT NULL,
 			timestamp INTEGER NOT NULL,
 			reason TEXT NOT NULL,
 			channel INTEGER NOT NULL,
