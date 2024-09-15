@@ -172,8 +172,8 @@ class DeleteReminder(ui.Button):
 
 class SetReminderModal(ui.Modal,title='Set a reminder for this message'):
 	_reason = ui.TextInput(
-			label = 'Reason',style=discord.TextStyle.short,
-			placeholder='Remind to publish this message...',required=True,
+			label = 'Reason',style=discord.TextStyle.paragraph,
+			placeholder="Leave empty to use the message's content as the reason",required=False,
 			max_length=500
 		)
 	_when = ui.TextInput(
@@ -193,8 +193,10 @@ class SetReminderModal(ui.Modal,title='Set a reminder for this message'):
 			timestamp = int(sm_utils.parse_duration(self._when.value).total_seconds() + time())
 			if (time() > timestamp):
 				raise remind.BadReminder("You need to specify a valid time for the reminder")
+			if not self._reason.value and not self.msg.content:
+				raise remind.BadReminder("The reason cannot be empty")
 			values = await remind.add_remind(user=interaction.user.id,channel_id=interaction.channel.id,
-									reason=self._reason.value,timestamp=timestamp,jump_url=self.msg.jump_url)
+									reason=self._reason.value or self.msg.content,timestamp=timestamp,jump_url=self.msg.jump_url)
 			embed.title = "Reminder created!"
 			embed.description = f"Reminder for <t:{values.timestamp}> (<t:{values.timestamp}:R>) of id **{values.id}**\nwith reason **\"{values.reason}\"** added successfully"
 			embed.colour = discord.Colour.green()
