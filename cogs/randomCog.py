@@ -1,12 +1,12 @@
 import importlib
 import discord
-from discord import app_commands
+from discord import app_commands, ui
 from discord.ext import commands
 from utils.bypassUrl import bypass
 from utils.websiteSS import get_ss, BadURL, BadResponse
 from utils.dearrow import dearrow, VideoNotFound
-from utils import animalapi
-from typing import Literal
+from utils import animalapi, translate
+from typing import Literal, Sequence, Optional
 import os
 import logging
 from time import perf_counter
@@ -15,21 +15,86 @@ import re
 from io import BytesIO
 logger = logging.getLogger(__name__)
 
+class Paginator(ui.View):
+	message: Optional[discord.InteractionMessage] = None
+	def __init__(self, user_view: int, seq: Sequence, starting_index = 0, timeout: Optional[int] = 180):
+		super().__init__(timeout=timeout)
+		self.user_view = user_view
+		self.index = starting_index
+		self.seq = seq
+		self.edit_children()
+	
+	async def on_timeout(self):
+		if self.message is not None:
+			try:
+				await self.message.edit(view=None)
+			except discord.NotFound: ...
+
+	async def update(self, interaction: discord.Interaction):
+		embed = discord.Embed(
+			title=f'Translation {self.index+1}/{len(self.seq)}',
+			description=f'\n • _{self.seq[self.index]}_', #using "-" as vignette breaks italic formatting. Thanks Discord
+			color=discord.Color.green()
+		)
+		embed.set_thumbnail(url='https://fun.guimx.me/r/3797961.png?compress=false')
+		embed.set_footer(text='Translated to your Discord language')
+		self.edit_children()
+		await interaction.response.edit_message(embed=embed,view=self)
+
+	def edit_children(self):
+		self.go_first.disabled = self.seq[0] == self.seq[self.index]
+		self.go_back.disabled = self.seq[0] == self.seq[self.index]
+		self.go_forward.disabled = self.seq[-1] == self.seq[self.index]
+		self.go_last.disabled = self.seq[-1] == self.seq[self.index]
+
+	@ui.button(label='<<',style=discord.ButtonStyle.primary)
+	async def go_first(self, interaction: discord.Interaction, button: ui.Button):
+		self.index = 0
+		await self.update(interaction)
+	
+	
+	@ui.button(label='<',style=discord.ButtonStyle.secondary)
+	async def go_back(self, interaction: discord.Interaction, button: ui.Button):
+		self.index -= 1
+		await self.update(interaction)
+	
+	
+	@ui.button(label='>',style=discord.ButtonStyle.primary)
+	async def go_forward(self, interaction: discord.Interaction, button: ui.Button):
+		self.index += 1
+		await self.update(interaction)
+	
+	
+	@ui.button(label='>>',style=discord.ButtonStyle.primary)
+	async def go_last(self, interaction: discord.Interaction, button: ui.Button):
+		self.index = len(self.seq)-1
+		self.edit_children()
+		await self.update(interaction)	
+
 class RandomCog(commands.Cog):
 	def __init__(self, bot: commands.Bot):
 		self.bot = bot
-		self.ctx_menu = app_commands.ContextMenu(
+		self.clickbait_ctx_menu = app_commands.ContextMenu(
 			name = 'Remove clickbait',
 			callback = self.remove_clickbait
 		)
-		@self.ctx_menu.error
-		async def ctx_menu_error(interaction, error):
+		self.translate_ctx_menu = app_commands.ContextMenu(
+			name = 'Translate',
+			callback = self.translate_text
+		)
+		@self.clickbait_ctx_menu.error
+		async def translate_ctx_menu_error(interaction, error):
+			await self.cog_app_command_error(interaction,error)
+		@self.translate_ctx_menu.error
+		async def clickbait_ctx_menu_error(interaction, error):
 			await self.cog_app_command_error(interaction,error)
 
-		self.bot.tree.add_command(self.ctx_menu)
+		self.bot.tree.add_command(self.clickbait_ctx_menu)
+		self.bot.tree.add_command(self.translate_ctx_menu)
 	
 	async def cog_unload(self):
-		self.bot.tree.remove_command(self.ctx_menu.name,type=self.ctx_menu.type)
+		self.bot.tree.remove_command(self.clickbait_ctx_menu.name,type=self.clickbait_ctx_menu.type)
+		self.bot.tree.remove_command(self.translate_ctx_menu.name,type=self.translate_ctx_menu.type)
 	
 	@app_commands.checks.cooldown(2,10,key=lambda i: i.user.id)
 	async def remove_clickbait(self, interaction: discord.Interaction, msg: discord.Message):
@@ -58,6 +123,24 @@ class RandomCog(commands.Cog):
 			embed.set_footer(text="No thumbnail found or hasn't been processed yet")
 		embed.set_author(name='Attempt on removing clickbait. Using DeArrow API',url='https://dearrow.ajay.app/',icon_url='http://fun.guimx.me/r/9CPk7o.png?compress=false')
 		await interaction.followup.send(embed=embed,file=file)
+
+	@app_commands.checks.cooldown(rate=1,per=5,key=lambda i: i.user.id)
+	async def translate_text(self, interaction: discord.Interaction, msg: discord.Message):
+		await interaction.response.defer()
+		translations = await translate.translate_text(target=interaction.locale.value[:2],q=msg.content)
+		if len(translations) != 0:
+			embed = discord.Embed(
+				title=f'Translation 1/{len(translations)}',
+				description=f'\n• _{translations[0]}_',
+				color=discord.Color.green()
+			)
+			embed.set_thumbnail(url='https://fun.guimx.me/r/3797961.png?compress=false')
+			embed.set_footer(text='Translated to your Discord language')
+			view = Paginator(interaction.user.id,translations)
+			await interaction.followup.send(embed=embed,view=view)
+			view.message = await interaction.original_response()
+		else:
+			await interaction.followup.send('Something wrong happened D:')
 
 	@commands.Cog.listener()
 	async def on_ready(self):

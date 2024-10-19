@@ -151,7 +151,7 @@ async def add_remind(user: int,channel_id: Optional[int],reason: str, timestamp:
 		raise BadReminder("You can't have a reminder with a time longer than a year")
 	if len(reason) > 500:
 		raise BadReminder("Your reminder's reason is way too big, to avoid excesive flood, the max length of your reason must not be larger than 500 characters (or 50 without a vote)")
-	if len(reason) > 50 and not await has_user_voted(user_id=user):
+	if len(reason) > 80 and not await has_user_voted(user_id=user):
 		raise BadReminder("Your reminder's reason is way too big, to have a bigger limit please consider giving me a [vote](<https://top.gg/bot/778785822828265514/vote>) :D")
 	async with Reader() as f:
 		reminders_amount = len(await f.load_all_user_reminders_id(user=user))
@@ -173,7 +173,7 @@ async def edit_remind(user: int, id: int, timestamp: Optional[int] = None, reaso
 	if timestamp - time.time() > 31536000:
 		raise BadReminder("You can't have a reminder with a time longer than a year")
 	user_voted = await has_user_voted(user_id=user)
-	if len(reason) > 50 and not user_voted:
+	if len(reason) > 80 and not user_voted:
 		raise BadReminder("Your reminder's reason is way too big, to have a bigger limit please consider giving me a [vote](<https://top.gg/bot/778785822828265514/vote>) :D")
 	if len(reason) > 500:
 		raise BadReminder("Your reminder's reason is way too big, to avoid excesive flood, the max length of your reason must not be larger than 500 characters")

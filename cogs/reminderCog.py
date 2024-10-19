@@ -198,7 +198,10 @@ class SetReminderModal(ui.Modal,title='Set a reminder for this message'):
 			values = await remind.add_remind(user=interaction.user.id,channel_id=interaction.channel.id,
 									reason=self._reason.value or self.msg.content,timestamp=timestamp,jump_url=self.msg.jump_url)
 			embed.title = "Reminder created!"
-			embed.description = f"Reminder for <t:{values.timestamp}> (<t:{values.timestamp}:R>) of id **{values.id}**\nwith reason **\"{values.reason}\"** added successfully"
+			embed.add_field(name='Time',value=f'<t:{values.timestamp}> (<t:{values.timestamp}:R>)',inline=False)
+			embed.add_field(name='Reason',value=values.reason)
+			embed.set_author(name=f'ID: {values.id}')
+			embed.set_thumbnail(url=interaction.user.display_avatar.url)
 			embed.colour = discord.Colour.green()
 			view = ui.View(timeout=360)
 			view.add_item(DeleteReminder(user=interaction.user.id,id=values.id))
@@ -317,7 +320,10 @@ class RemindCog(commands.GroupCog,name='reminder'):
 				raise remind.BadReminder("You need to specify a valid time for the reminder")
 			values = await remind.add_remind(user=interaction.user.id,channel_id=channel_id,reason=reason,timestamp=timestamp)
 			embed.title = "Reminder created!"
-			embed.description = f"Reminder for <t:{values.timestamp}> (<t:{values.timestamp}:R>) of id **{values.id}**\nwith reason **\"{reason}\"** added successfully"
+			embed.add_field(name='Time',value=f'<t:{values.timestamp}> (<t:{values.timestamp}:R>)',inline=False)
+			embed.add_field(name='Reason',value=reason)
+			embed.set_author(name=f'ID: {values.id}')
+			embed.set_thumbnail(url=interaction.user.display_avatar.url)
 			embed.colour = discord.Colour.green()
 			if not interaction.is_guild_integration() and interaction.guild:
 				embed.set_footer(text='Because this bot is not in this server, the reminder will be sent in your DMs')
