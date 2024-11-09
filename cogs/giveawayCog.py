@@ -9,9 +9,12 @@ from time import time
 import asyncio
 from random import randint
 from utils.userVoted import has_user_voted
-from typing import List, Tuple
+from typing import List, Tuple, TYPE_CHECKING
 import logging
 logger = logging.getLogger(__name__)
+
+if TYPE_CHECKING:
+	from bot import UtilsBot
 
 class GiveawayJoinDynamicButton(ui.DynamicItem[ui.Button],template=r'giveaway_join:channel_id:(?P<id>[0-9]+)'):
 	def __init__(self, channel_id: int):
@@ -182,7 +185,7 @@ class GiveawayModal(ui.Modal,title='Creates a giveaway!'):
 
 
 class GiveawayCog(commands.GroupCog,name='giveaway'):
-	def __init__(self, bot: commands.Bot):
+	def __init__(self, bot: 'UtilsBot'):
 		self.bot = bot
 	
 	@tasks.loop(seconds=10)
@@ -344,5 +347,5 @@ class GiveawayCog(commands.GroupCog,name='giveaway'):
 			a = await gw.select_all()
 			await ctx.send(content=f'{a}')
 
-async def setup(bot: commands.Bot):
+async def setup(bot: 'UtilsBot'):
 	await bot.add_cog(GiveawayCog(bot))

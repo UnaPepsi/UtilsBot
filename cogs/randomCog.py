@@ -6,7 +6,7 @@ from utils.bypassUrl import bypass
 from utils.websiteSS import get_ss, BadURL, BadResponse
 from utils.dearrow import dearrow, VideoNotFound
 from utils import animalapi, translate
-from typing import Literal, Sequence, Optional, List
+from typing import Literal, Sequence, Optional, List, TYPE_CHECKING
 import os
 import logging
 from time import perf_counter
@@ -15,7 +15,11 @@ import re
 from io import BytesIO
 from shazamio import Shazam, Serialize #reverse engineered shazam library. awesome
 from shazamio.schemas.models import TrackInfo
+from utils.sm_utils import caching
 logger = logging.getLogger(__name__)
+
+if TYPE_CHECKING:
+	from bot import UtilsBot
 
 class Paginator(ui.View):
 	message: Optional[discord.InteractionMessage] = None
@@ -74,7 +78,7 @@ class Paginator(ui.View):
 		await self.update(interaction)	
 
 class RandomCog(commands.Cog):
-	def __init__(self, bot: commands.Bot):
+	def __init__(self, bot: 'UtilsBot'):
 		self.bot = bot
 		self.shazam = Shazam()
 		self.clickbait_ctx_menu = app_commands.ContextMenu(
@@ -115,28 +119,40 @@ class RandomCog(commands.Cog):
 			return
 		if len(msg.attachments) > 10:
 			logger.warning('It seems like Discord now supports more than 10 attachments in a single message')
-		if not await self.bot.is_owner(interaction.user):
-			await interaction.response.send_message('In development. Will be available soon',ephemeral=True)
-			return
+
 		await interaction.response.defer()
+
+		@caching
+		async def get_shazam_song(o: bytes) -> Optional[TrackInfo]:
+			data = await self.shazam.recognize(await attachment.read())
+			if data.get('matches',[]):
+				return Serialize.track(await self.shazam.track_about(data['matches'][0]['id']))
+
 		results: List[TrackInfo] = []
 		for attachment in msg.attachments:
 			if not attachment.content_type or not re.search('(audio|video)',attachment.content_type):
 				continue
-			data = await self.shazam.recognize(await attachment.read())
-			if data.get('matches',[]):
-				results.append(Serialize.track(await self.shazam.track_about(data['matches'][0]['id'])))
-
+			data = await get_shazam_song(await attachment.read())
+			if data: results.append(data)
 		if not results:
 			await interaction.followup.send('No matches found :(')
+			return
 		embed = discord.Embed(
 			description = '',
 			color=discord.Color.blue()
 		)
 		embed.set_author(icon_url='https://fun.guimx.me/r/PFTT4RB5Bx.png?compress=false',name='Songs found')
 		for result in results:
-			url = result.youtube_link or result.spotify_url or result.apple_music_url or result.shazam_url
-			embed.description += f'**{results.index(result)+1}. {result.title}** ([url]({url}))\n' #type: ignore
+			info = ''
+			#these links are sometimes wrong or just broken
+			if result.youtube_link: info += f'{self.bot.custom_emojis.youtube} [YouTube]({result.youtube_link}) '
+			if result.spotify_url: info += f'{self.bot.custom_emojis.spotify} [Ppotify]({result.spotify_url}) '
+			if result.apple_music_url and result.apple_music_url != 'https://music.apple.com/subscribe':
+				info += f'{self.bot.custom_emojis.apple_music} [Apple Music]({result.apple_music_url}) '
+			if result.ringtone: info += f'{self.bot.custom_emojis.apple_music} [Ringtone]({result.ringtone}) '
+			info += f'{self.bot.custom_emojis.shazam} [Shazam](https://shazam.com/track/{result.key}) '
+			# if result.shazam_url: info += f'{self.bot.custom_emojis.shazam} [Shazam]({result.shazam_url}) ' #just returns /42
+			embed.add_field(name=f'{results.index(result)+1}. {result.title}',value=info,inline=False)			
 		await interaction.followup.send(embed=embed)
 
 	@app_commands.checks.cooldown(2,10,key=lambda i: i.user.id)
@@ -369,5 +385,5 @@ class RandomCog(commands.Cog):
 		await ctx.reply('My source code is [here!](<https://github.com/UnaPepsi/UtilsBot>) :>',mention_author=False)
 		
 		
-async def setup(bot: commands.Bot):
+async def setup(bot: 'UtilsBot'):
 	await bot.add_cog(RandomCog(bot))

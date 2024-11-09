@@ -1,11 +1,12 @@
 from dotenv import load_dotenv
 load_dotenv()
 import discord
-from discord import Intents, CustomActivity, BaseActivity
+from discord import Intents, CustomActivity, BaseActivity, Emoji
 from discord.ext import commands
 from os import environ, listdir
 from typing import Optional
 import asyncio
+from dataclasses import dataclass
 from cogs.giveawayCog import GiveawayJoinDynamicButton
 import logging
 import logging.handlers
@@ -32,7 +33,7 @@ discord.utils.setup_logging(handler=console_handler)
 class UtilsBot(commands.Bot):
 	def __init__(self,intents: Intents,activity: Optional[BaseActivity] = None) -> None:
 		super().__init__(command_prefix=commands.when_mentioned_or('ub'),intents=intents,activity=activity,help_command=None)
-	
+
 	async def setup_hook(self) -> None:
 		tasks = []
 		for item in listdir('cogs'):
@@ -41,6 +42,12 @@ class UtilsBot(commands.Bot):
 		asyncio.gather(*tasks)
 		await self.load_extension('jishaku')
 		self.add_dynamic_items(GiveawayJoinDynamicButton)
+		self.custom_emojis = MyEmojis(
+			youtube=await self.fetch_application_emoji(1304848067723530260),
+			spotify=await self.fetch_application_emoji(1304848325887135795),
+			apple_music=await self.fetch_application_emoji(1304848409596919848),
+			shazam=await self.fetch_application_emoji(1304848463481147443)
+		)
 	
 	async def load_extensions(self, ext: str) -> None:
 		await self.load_extension(ext)
@@ -50,8 +57,16 @@ class UtilsBot(commands.Bot):
 			return
 		else: raise error
 
+@dataclass
+class MyEmojis:
+	youtube: Emoji
+	spotify: Emoji
+	apple_music: Emoji
+	shazam: Emoji
+
+
 if __name__ == '__main__':
-	bot = UtilsBot(intents=Intents(dm_messages = True, guild_messages = True,guilds = True),activity=CustomActivity(name="New commands! check them out"))
+	bot = UtilsBot(intents=Intents(dm_messages = True, guild_messages = True,guilds = True),activity=CustomActivity(name=environ['ACTIVITY']))
 	try:
 		asyncio.run(bot.start(environ['TOKEN']))
 	except KeyboardInterrupt:

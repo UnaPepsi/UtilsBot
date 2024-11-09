@@ -3,7 +3,10 @@ from discord import app_commands, ui
 from discord.ext import commands
 from time import time
 from utils import typingGame
-from typing import Optional
+from typing import Optional, TYPE_CHECKING
+
+if TYPE_CHECKING:
+	from bot import UtilsBot
 
 class RaceModal(ui.Modal,title='Typing Race!'):
 	_text = ui.TextInput(label='Type!',style=discord.TextStyle.short,
@@ -59,7 +62,7 @@ class RaceView(ui.View):
 @app_commands.allowed_installs(guilds=True,users=True)
 @app_commands.allowed_contexts(guilds=True,dms=True,private_channels=True)
 class TypingGame(commands.GroupCog,name='type-race'):
-	def __init__(self, bot: commands.Bot):
+	def __init__(self, bot: 'UtilsBot'):
 		self.bot = bot
 
 	@app_commands.command(name='race')
@@ -75,5 +78,5 @@ class TypingGame(commands.GroupCog,name='type-race'):
 		await interaction.response.send_message(embed=embed,view=view)
 		view.message = await interaction.original_response()
 
-async def setup(bot: commands.Bot):
+async def setup(bot: 'UtilsBot'):
 	await bot.add_cog(TypingGame(bot))

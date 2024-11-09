@@ -6,8 +6,11 @@ from discord.ext import commands
 from utils.todo import TodoDB, NoTodoFound, BadTodo
 from time import time
 import logging
-from typing import Optional, List
+from typing import Optional, List, TYPE_CHECKING
 logger = logging.getLogger(__name__)
+
+if TYPE_CHECKING:
+	from bot import UtilsBot
 
 async def autocomplete_todo(interaction: discord.Interaction, current: str) -> List[app_commands.Choice[int]]:
 	async with TodoDB() as todo:
@@ -155,7 +158,7 @@ class TodoRemoveView(ui.View):
 @app_commands.allowed_installs(guilds=True,users=True)
 @app_commands.allowed_contexts(guilds=True,dms=True,private_channels=True)
 class TODOCog(commands.GroupCog,name='task'):
-	def __init__(self, bot: commands.Bot):
+	def __init__(self, bot: 'UtilsBot'):
 		self.bot = bot
 
 	async def cog_load(self):
@@ -276,5 +279,5 @@ class TODOCog(commands.GroupCog,name='task'):
 				view.message = None
 				logger.warning('Could not set message to view')
 
-async def setup(bot: commands.Bot):
+async def setup(bot: 'UtilsBot'):
 	await bot.add_cog(TODOCog(bot))

@@ -5,8 +5,11 @@ import asyncio
 from utils import remind, sm_utils
 from time import time
 import logging
-from typing import Optional, List
+from typing import Optional, List, TYPE_CHECKING
 logger = logging.getLogger(__name__)
+
+if TYPE_CHECKING:
+	from bot import UtilsBot
 
 async def reminder_autocomplete(interaction: discord.Interaction, current: str) -> List[app_commands.Choice[int]]:
 	async with remind.Reader() as rd:
@@ -218,7 +221,7 @@ class SetReminderModal(ui.Modal,title='Set a reminder for this message'):
 @app_commands.allowed_installs(guilds=True,users=True)
 @app_commands.allowed_contexts(guilds=True,dms=True,private_channels=True)
 class RemindCog(commands.GroupCog,name='reminder'):
-	def __init__(self, bot: commands.Bot):
+	def __init__(self, bot: 'UtilsBot'):
 		self.bot = bot
 		self.ctx_menu = app_commands.ContextMenu(
 			name = 'Set reminder for...',
@@ -462,5 +465,5 @@ class RemindCog(commands.GroupCog,name='reminder'):
 		if isinstance(view,ReminderPaginator):
 			view.message = await interaction.original_response()
 
-async def setup(bot: commands.Bot):
+async def setup(bot: 'UtilsBot'):
 	await bot.add_cog(RemindCog(bot))

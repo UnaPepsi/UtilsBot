@@ -3,7 +3,7 @@ from discord import app_commands
 from discord.ext import commands
 import re
 from datetime import datetime
-from typing import Union, Optional, Any, List
+from typing import Union, Optional, Any, List, TYPE_CHECKING
 from utils.customEmbed import CustomEmbed, BadTag, TagInUse, TooManyEmbeds
 from utils import sm_utils
 import time
@@ -11,6 +11,8 @@ import json
 import logging
 logger = logging.getLogger(__name__)
 
+if TYPE_CHECKING:
+	from bot import UtilsBot
 
 default_embed = discord.Embed(
 	title='This is the title',
@@ -347,7 +349,7 @@ class SaveEmbed(discord.ui.Modal,title='Saves the embed!'):
 @app_commands.allowed_installs(guilds=True,users=True)
 @app_commands.allowed_contexts(guilds=True,dms=True,private_channels=True)
 class CECog(commands.GroupCog,name='embed'):
-	def __init__(self, bot: commands.Bot):
+	def __init__(self, bot: 'UtilsBot'):
 		self.bot = bot
 
 	async def cog_load(self):
@@ -416,5 +418,5 @@ class CECog(commands.GroupCog,name='embed'):
 		else:
 			raise error
 
-async def setup(bot: commands.Bot):
+async def setup(bot: 'UtilsBot'):
 	await bot.add_cog(CECog(bot))
