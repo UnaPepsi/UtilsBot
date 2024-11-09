@@ -6,13 +6,15 @@ from utils.bypassUrl import bypass
 from utils.websiteSS import get_ss, BadURL, BadResponse
 from utils.dearrow import dearrow, VideoNotFound
 from utils import animalapi, translate
-from typing import Literal, Sequence, Optional
+from typing import Literal, Sequence, Optional, List
 import os
 import logging
 from time import perf_counter
 from asyncio import TimeoutError
 import re
 from io import BytesIO
+from shazamio import Shazam, Serialize #reverse engineered shazam library. awesome
+from shazamio.schemas.models import TrackInfo
 logger = logging.getLogger(__name__)
 
 class Paginator(ui.View):
@@ -74,6 +76,7 @@ class Paginator(ui.View):
 class RandomCog(commands.Cog):
 	def __init__(self, bot: commands.Bot):
 		self.bot = bot
+		self.shazam = Shazam()
 		self.clickbait_ctx_menu = app_commands.ContextMenu(
 			name = 'Remove clickbait',
 			callback = self.remove_clickbait
@@ -82,20 +85,60 @@ class RandomCog(commands.Cog):
 			name = 'Translate',
 			callback = self.translate_text
 		)
+		self.shazam_ctx_menu = app_commands.ContextMenu(
+			name = 'Shazam!',
+			callback = self.shazam_song
+		)
 		@self.clickbait_ctx_menu.error
-		async def translate_ctx_menu_error(interaction, error):
+		async def clickbait_ctx_menu_error(interaction, error):
 			await self.cog_app_command_error(interaction,error)
 		@self.translate_ctx_menu.error
-		async def clickbait_ctx_menu_error(interaction, error):
+		async def translate_ctx_menu_error(interaction, error):
+			await self.cog_app_command_error(interaction,error)
+		@self.shazam_ctx_menu.error
+		async def shazam_ctx_menu_error(interaction, error):
 			await self.cog_app_command_error(interaction,error)
 
 		self.bot.tree.add_command(self.clickbait_ctx_menu)
 		self.bot.tree.add_command(self.translate_ctx_menu)
+		self.bot.tree.add_command(self.shazam_ctx_menu)
 	
 	async def cog_unload(self):
 		self.bot.tree.remove_command(self.clickbait_ctx_menu.name,type=self.clickbait_ctx_menu.type)
 		self.bot.tree.remove_command(self.translate_ctx_menu.name,type=self.translate_ctx_menu.type)
+		self.bot.tree.remove_command(self.shazam_ctx_menu.name,type=self.translate_ctx_menu.type)
 	
+	@app_commands.checks.cooldown(rate=1,per=10,key=lambda i: i.user.id)
+	async def shazam_song(self, interaction: discord.Interaction, msg: discord.Message):
+		if not msg.attachments:
+			await interaction.response.send_message('Message must contain at least 1 attachment',ephemeral=True)
+			return
+		if len(msg.attachments) > 10:
+			logger.warning('It seems like Discord now supports more than 10 attachments in a single message')
+		if not await self.bot.is_owner(interaction.user):
+			await interaction.response.send_message('In development. Will be available soon',ephemeral=True)
+			return
+		await interaction.response.defer()
+		results: List[TrackInfo] = []
+		for attachment in msg.attachments:
+			if not attachment.content_type or not re.search('(audio|video)',attachment.content_type):
+				continue
+			data = await self.shazam.recognize(await attachment.read())
+			if data.get('matches',[]):
+				results.append(Serialize.track(await self.shazam.track_about(data['matches'][0]['id'])))
+
+		if not results:
+			await interaction.followup.send('No matches found :(')
+		embed = discord.Embed(
+			description = '',
+			color=discord.Color.blue()
+		)
+		embed.set_author(icon_url='https://fun.guimx.me/r/PFTT4RB5Bx.png?compress=false',name='Songs found')
+		for result in results:
+			url = result.youtube_link or result.spotify_url or result.apple_music_url or result.shazam_url
+			embed.description += f'**{results.index(result)+1}. {result.title}** ([url]({url}))\n' #type: ignore
+		await interaction.followup.send(embed=embed)
+
 	@app_commands.checks.cooldown(2,10,key=lambda i: i.user.id)
 	async def remove_clickbait(self, interaction: discord.Interaction, msg: discord.Message):
 		if (vid_re := re.search(r'(?P<url>http(s)?:\/\/(w{3}\.)?(youtu.be\/|youtube.com\/watch\?v=))(?P<video_id>.*)',msg.content)) is None:
