@@ -21,62 +21,6 @@ logger = logging.getLogger(__name__)
 if TYPE_CHECKING:
 	from bot import UtilsBot
 
-class Paginator(ui.View):
-	message: Optional[discord.InteractionMessage] = None
-	def __init__(self, user_view: int, seq: Sequence, starting_index = 0, timeout: Optional[int] = 180):
-		super().__init__(timeout=timeout)
-		self.user_view = user_view
-		self.index = starting_index
-		self.seq = seq
-		self.edit_children()
-	
-	async def on_timeout(self):
-		if self.message is not None:
-			try:
-				await self.message.edit(view=None)
-			except discord.NotFound: ...
-
-	async def update(self, interaction: discord.Interaction):
-		embed = discord.Embed(
-			title=f'Translation {self.index+1}/{len(self.seq)}',
-			description=f'\n • _{self.seq[self.index]}_', #using "-" as vignette breaks italic formatting. Thanks Discord
-			color=discord.Color.green()
-		)
-		embed.set_thumbnail(url='https://fun.guimx.me/r/3797961.png?compress=false')
-		embed.set_footer(text='Translated to your Discord language')
-		self.edit_children()
-		await interaction.response.edit_message(embed=embed,view=self)
-
-	def edit_children(self):
-		self.go_first.disabled = self.seq[0] == self.seq[self.index]
-		self.go_back.disabled = self.seq[0] == self.seq[self.index]
-		self.go_forward.disabled = self.seq[-1] == self.seq[self.index]
-		self.go_last.disabled = self.seq[-1] == self.seq[self.index]
-
-	@ui.button(label='<<',style=discord.ButtonStyle.primary)
-	async def go_first(self, interaction: discord.Interaction, button: ui.Button):
-		self.index = 0
-		await self.update(interaction)
-	
-	
-	@ui.button(label='<',style=discord.ButtonStyle.secondary)
-	async def go_back(self, interaction: discord.Interaction, button: ui.Button):
-		self.index -= 1
-		await self.update(interaction)
-	
-	
-	@ui.button(label='>',style=discord.ButtonStyle.primary)
-	async def go_forward(self, interaction: discord.Interaction, button: ui.Button):
-		self.index += 1
-		await self.update(interaction)
-	
-	
-	@ui.button(label='>>',style=discord.ButtonStyle.primary)
-	async def go_last(self, interaction: discord.Interaction, button: ui.Button):
-		self.index = len(self.seq)-1
-		self.edit_children()
-		await self.update(interaction)	
-
 class RandomCog(commands.Cog):
 	def __init__(self, bot: 'UtilsBot'):
 		self.bot = bot
@@ -111,7 +55,9 @@ class RandomCog(commands.Cog):
 		self.bot.tree.remove_command(self.clickbait_ctx_menu.name,type=self.clickbait_ctx_menu.type)
 		self.bot.tree.remove_command(self.translate_ctx_menu.name,type=self.translate_ctx_menu.type)
 		self.bot.tree.remove_command(self.shazam_ctx_menu.name,type=self.translate_ctx_menu.type)
-	
+
+	@app_commands.allowed_installs(guilds=True,users=True)	
+	@app_commands.allowed_contexts(guilds=True,dms=True,private_channels=True)
 	@app_commands.checks.cooldown(rate=1,per=10,key=lambda i: i.user.id)
 	async def shazam_song(self, interaction: discord.Interaction, msg: discord.Message):
 		if not msg.attachments:
@@ -155,6 +101,8 @@ class RandomCog(commands.Cog):
 			embed.add_field(name=f'{results.index(result)+1}. {result.title}',value=info,inline=False)			
 		await interaction.followup.send(embed=embed)
 
+	@app_commands.allowed_installs(guilds=True,users=True)
+	@app_commands.allowed_contexts(guilds=True,dms=True,private_channels=True)
 	@app_commands.checks.cooldown(2,10,key=lambda i: i.user.id)
 	async def remove_clickbait(self, interaction: discord.Interaction, msg: discord.Message):
 		if (vid_re := re.search(r'(?P<url>http(s)?:\/\/(w{3}\.)?(youtu.be\/|youtube.com\/watch\?v=))(?P<video_id>.*)',msg.content)) is None:
@@ -163,7 +111,8 @@ class RandomCog(commands.Cog):
 			'`https://www.youtube.com/watch?v=6NQHtVrP3gE\n'+
 			'https://youtu.be/6NQHtVrP3gE`')
 			return
-		await interaction.response.defer()
+		ephemeral = not isinstance(interaction.user,discord.User) and interaction.user.resolved_permissions is not None and not interaction.user.resolved_permissions.embed_links
+		await interaction.response.defer(ephemeral=True)
 		try:
 			d = await dearrow(vid_re.group('video_id'))
 		except VideoNotFound as e:
@@ -183,23 +132,20 @@ class RandomCog(commands.Cog):
 		embed.set_author(name='Attempt on removing clickbait. Using DeArrow API',url='https://dearrow.ajay.app/',icon_url='http://fun.guimx.me/r/9CPk7o.png?compress=false')
 		await interaction.followup.send(embed=embed,file=file)
 
+	@app_commands.allowed_installs(guilds=True,users=True)
+	@app_commands.allowed_contexts(guilds=True,dms=True,private_channels=True)
 	@app_commands.checks.cooldown(rate=1,per=5,key=lambda i: i.user.id)
 	async def translate_text(self, interaction: discord.Interaction, msg: discord.Message):
-		await interaction.response.defer()
-		translations = await translate.translate_text(target=interaction.locale.value[:2],q=msg.content)
-		if len(translations) != 0:
-			embed = discord.Embed(
-				title=f'Translation 1/{len(translations)}',
-				description=f'\n• _{translations[0]}_',
-				color=discord.Color.green()
-			)
-			embed.set_thumbnail(url='https://fun.guimx.me/r/3797961.png?compress=false')
-			embed.set_footer(text='Translated to your Discord language')
-			view = Paginator(interaction.user.id,translations)
-			await interaction.followup.send(embed=embed,view=view)
-			view.message = await interaction.original_response()
-		else:
-			await interaction.followup.send('Something wrong happened D:')
+		ephemeral = not isinstance(interaction.user,discord.User) and interaction.user.resolved_permissions is not None and not interaction.user.resolved_permissions.embed_links
+		await interaction.response.defer(ephemeral=ephemeral)
+		translation = await translate.translate_google(target=interaction.locale.value,q=msg.content)
+		embed = discord.Embed(
+			description=f'```{translation}```',
+			color=discord.Color.green()
+		)
+		embed.set_thumbnail(url='https://fun.guimx.me/r/3797961.png?compress=false')
+		embed.set_footer(text='Translated to your Discord language')
+		await interaction.followup.send(embed=embed)
 
 	@commands.Cog.listener()
 	async def on_ready(self):

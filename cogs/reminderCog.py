@@ -190,7 +190,8 @@ class SetReminderModal(ui.Modal,title='Set a reminder for this message'):
 
 	async def on_submit(self, interaction: discord.Interaction):
 		if interaction.channel is None: return
-		await interaction.response.defer(thinking=True)
+		ephemeral = not isinstance(interaction.user,discord.User) and interaction.user.resolved_permissions is not None and not interaction.user.resolved_permissions.embed_links
+		await interaction.response.defer(thinking=True,ephemeral=ephemeral)
 		embed = discord.Embed()
 		try:
 			timestamp = int(sm_utils.parse_duration(self._when.value).total_seconds() + time())
@@ -198,7 +199,11 @@ class SetReminderModal(ui.Modal,title='Set a reminder for this message'):
 				raise remind.BadReminder("You need to specify a valid time for the reminder")
 			if not self._reason.value and not self.msg.content:
 				raise remind.BadReminder("The reason cannot be empty")
-			values = await remind.add_remind(user=interaction.user.id,channel_id=interaction.channel.id,
+			channel_id = None
+			if interaction.is_guild_integration(): channel_id = interaction.channel.id
+			else:
+				channel_id = interaction.user.dm_channel.id if interaction.user.dm_channel is not None else (await interaction.user.create_dm()).id
+			values = await remind.add_remind(user=interaction.user.id,channel_id=channel_id,
 									reason=self._reason.value or self.msg.content,timestamp=timestamp,jump_url=self.msg.jump_url)
 			embed.title = "Reminder created!"
 			embed.add_field(name='Time',value=f'<t:{values.timestamp}> (<t:{values.timestamp}:R>)',inline=False)
@@ -206,6 +211,8 @@ class SetReminderModal(ui.Modal,title='Set a reminder for this message'):
 			embed.set_author(name=f'ID: {values.id}')
 			embed.set_thumbnail(url=interaction.user.display_avatar.url)
 			embed.colour = discord.Colour.green()
+			if not interaction.is_guild_integration() and interaction.guild:
+				embed.set_footer(text='Because this bot is not in this server, the reminder will be sent in your DMs')
 			view = ui.View(timeout=360)
 			view.add_item(DeleteReminder(user=interaction.user.id,id=values.id))
 			view.on_timeout = lambda : view.message.edit(view=None) #type: ignore
@@ -229,7 +236,10 @@ class RemindCog(commands.GroupCog,name='reminder'):
 		)
 
 		self.bot.tree.add_command(self.ctx_menu)
-		
+	
+	@app_commands.allowed_installs(guilds=True,users=True)
+	@app_commands.allowed_contexts(guilds=True,dms=True,private_channels=True)
+	@app_commands.checks.cooldown(2,7,key=lambda i: i.user.id)
 	async def ctx_menu_add_reminder(self, interaction: discord.Interaction, msg: discord.Message):
 		await interaction.response.send_modal(SetReminderModal(msg=msg))
 

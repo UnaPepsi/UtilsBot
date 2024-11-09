@@ -3,6 +3,7 @@ import asyncio
 from io import BytesIO
 import re
 from datetime import timedelta
+from warnings import warn
 
 def format_miss_perms(missing_perms: List[str]) -> str:
 	perms = [perm.replace('_',' ') for perm in missing_perms]
@@ -12,19 +13,20 @@ def format_miss_perms(missing_perms: List[str]) -> str:
 cache: Dict[str,Dict[Any,Any]] = {}
 
 def caching(func: Callable):
-	async def wrapper(*args):
-		if len(args) == 0:
+	async def wrapper(*args, **kwargs):
+		combined_args = args+tuple(kwargs.values())
+		if len(combined_args) == 0:
 			raise ValueError('Missing parameters')
-		if args in cache.get(func.__name__,{}):
-			result = cache[func.__name__][args]
+		if combined_args in cache.get(func.__name__,{}):
+			result = cache[func.__name__][combined_args]
 			if isinstance(result,BytesIO):
 				result.seek(0)
 			return result
 		else:
 			cache[func.__name__] = cache.get(func.__name__,{})
-			cache[func.__name__][args] = await func(*args)
-			asyncio.create_task(wait_and_remove(600,func.__name__,args))
-			return cache[func.__name__][args]
+			cache[func.__name__][combined_args] = await func(*args,**kwargs)
+			asyncio.create_task(wait_and_remove(600,func.__name__,combined_args))
+			return cache[func.__name__][combined_args]
 	return wrapper
 
 async def wait_and_remove(seconds: Union[int,float], func_name: str, value) -> None:
@@ -66,6 +68,15 @@ def parse_duration(duration_str: str):
 		return duration
 	else:
 		raise ValueError("Invalid duration format")
+
+def deprecated(reason: str):
+	def dec(func: Callable):
+		async def wrapper(*args,**kwargs):
+			warn(message=reason,category=DeprecationWarning,stacklevel=2)
+			return await func(*args,**kwargs)
+		return wrapper
+	return dec
+
 
 hex_colors = {
     "black": 0x000000,
