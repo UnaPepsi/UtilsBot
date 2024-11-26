@@ -136,9 +136,21 @@ class RandomCog(commands.Cog):
 	@app_commands.allowed_contexts(guilds=True,dms=True,private_channels=True)
 	@app_commands.checks.cooldown(rate=1,per=5,key=lambda i: i.user.id)
 	async def translate_text(self, interaction: discord.Interaction, msg: discord.Message):
+		content = msg.content
+		if not msg.content and len(msg.embeds) > 0 and msg.embeds[0].description:
+			content = msg.embeds[0].description
+		elif msg.reference and isinstance(msg.reference.resolved,discord.Message) and msg.reference.resolved.content:
+			content = msg.reference.resolved.content
+		if not content or not content.split():
+			await interaction.response.send_message("Couldn't translate that message. Is there content there?")
+			return
 		ephemeral = not isinstance(interaction.user,discord.User) and interaction.user.resolved_permissions is not None and not interaction.user.resolved_permissions.embed_links
 		await interaction.response.defer(ephemeral=ephemeral)
-		translation = await translate.translate_google(target=interaction.locale.value,q=msg.content)
+		try:
+			translation = await translate.translate_google(target=interaction.locale.value,q=content)
+		except translate.TranslationFailed:
+			await interaction.followup.send("Something went wrong :(")
+			return
 		embed = discord.Embed(
 			description=f'```{translation}```',
 			color=discord.Color.green()

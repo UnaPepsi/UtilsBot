@@ -2,6 +2,8 @@ from aiohttp import ClientSession
 from typing import List
 from utils.sm_utils import deprecated, caching
 
+class TranslationFailed(Exception): ...
+
 @deprecated('Use translate_google instead')
 async def translate_text(*, source = 'auto', target: str, q: str) -> List[str]:
     async with ClientSession() as sess:
@@ -23,9 +25,11 @@ async def translate_text(*, source = 'auto', target: str, q: str) -> List[str]:
 
 @caching
 async def translate_google(*, target: str, q: str) -> str:
-    url = f'https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl={target}&dt=t&dj=1&source=input&q={q}'
+    url = f'https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&dt=t&dj=1&source=input'
     async with ClientSession() as sess:
-        async with sess.get(url) as resp:
+        async with sess.get(url,params={'tl':target,'q':q}) as resp: #params kwarg here so characters like '&' don't mess with the actual translation
+            if not resp.ok:
+                raise TranslationFailed()
             data = await resp.json()
             translation = ''
             for sentence in data['sentences']:
