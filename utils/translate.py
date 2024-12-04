@@ -17,6 +17,7 @@ async def translate_text(*, source = 'auto', target: str, q: str) -> List[str]:
             if resp.ok:
                 data = await resp.json()
                 # translations = data.get('alternatives').insert(0,data.get('translatedText')) #this returns None for some reason???
+                #note to self: ofc it does??? list.insert returns None
                 translations = [data.get('translatedText')]
                 translations += data.get('alternatives')
                 return translations

@@ -139,7 +139,7 @@ class RandomCog(commands.Cog):
 		content = msg.content
 		if not msg.content and len(msg.embeds) > 0 and msg.embeds[0].description:
 			content = msg.embeds[0].description
-		elif msg.reference and isinstance(msg.reference.resolved,discord.Message) and msg.reference.resolved.content:
+		elif msg.reference and isinstance(msg.reference.resolved,discord.Message) and msg.reference.resolved.content: # msg.reference.resolved is always None. Probably something to do with my intents
 			content = msg.reference.resolved.content
 		if not content or not content.split():
 			await interaction.response.send_message("Couldn't translate that message. Is there content there?")
@@ -246,8 +246,8 @@ class RandomCog(commands.Cog):
 			await interaction.followup.send('An error happened :(')
 		else:
 			embed = discord.Embed(
-				title = f'Screenshot taken from {link}',
-				colour = discord.Colour.green(),
+				title = 'Screenshot of website',
+				colour = discord.Colour.green()
 			)
 			embed.set_footer(text=f"If the resolution is not the one specified, it's because I couldn't screenshot normally :<")
 			embed.set_image(url='attachment://image.png')
