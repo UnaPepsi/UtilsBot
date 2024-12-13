@@ -1,5 +1,5 @@
 import aiosqlite
-from typing import Optional, Self, List
+from typing import Self, List
 from utils.userVoted import has_user_voted
 
 class NoTodoFound(Exception): ...
@@ -110,13 +110,13 @@ class TodoDB:
 		""",(user,id))
 		results = await self.cursor.fetchone()
 		if results is None:
-			if (user_todo_ids := await self.load_all_user_todos_id(user=user)) is not None:
+			if not (user_todo_ids := await self.load_all_user_todos_id(user=user)):
 				raise NoTodoFound(f'No task of ID **{id}** found.\n<@{user}> tasks: {" ".join(map(lambda x: f"{x}",user_todo_ids))}')
 			else:
 				raise NoTodoFound('You have no tasks saved')
 		return Todo(*results)
 	
-	async def load_all_user_todos_id(self, *, user: int, limit: int = -1) -> Optional[List[int]]:
+	async def load_all_user_todos_id(self, *, user: int, limit: int = -1) -> List[int]:
 		"""
 		Returns all the IDs
 
@@ -128,9 +128,9 @@ class TodoDB:
 		WHERE user = ? LIMIT ?
 		""",(user,limit))
 		results = await self.cursor.fetchall()
-		return [result[0] for result in results] if results != [] else None
+		return [result[0] for result in results]
 
-	async def load_autocomplete(self,*, user: int, reason: str, limit: int = -1) -> Optional[List[Todo]]:
+	async def load_autocomplete(self,*, user: int, reason: str, limit: int = -1) -> List[Todo]:
 		"""
 		Returns a list of the TODOs that have a reason LIKE the given reason
 
@@ -143,7 +143,7 @@ class TodoDB:
 		WHERE user = ? AND reason LIKE ? LIMIT ?
 		""",(user,'%'+reason+'%',limit))
 		results = await self.cursor.fetchall()
-		return [Todo(*result) for result in results] if results != [] else None
+		return [Todo(*result) for result in results]
 
 	async def load_todo_amounts(self,*, user: int) -> int:
 		"""

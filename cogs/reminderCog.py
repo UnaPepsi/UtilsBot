@@ -13,24 +13,22 @@ if TYPE_CHECKING:
 
 async def reminder_autocomplete(interaction: discord.Interaction, current: str) -> List[app_commands.Choice[int]]:
 	async with remind.Reader() as rd:
+		choices_list: List[app_commands.Choice[int]] = []
 		if current == '':
 			reminders = await rd.load_all_user_reminders(user=interaction.user.id,limit=25)
-			if reminders is None:
-				return []
-			choices_list: List[app_commands.Choice[int]] = []
 			for rem in reminders:
 				choices_list.append(app_commands.Choice(name=f"{rem.id}. {rem.reason if len(rem.reason) <= 30 else rem.reason[:27]+'...'}",value=rem.id))
-			return choices_list
-		else:		
+		else:
 			try:
 				rem = await remind.check_remind(user=interaction.user.id,id=int(current))
-				return [app_commands.Choice(name=f"{current}. {rem.reason if len(rem.reason) <= 30 else rem.reason[:27]+'...'}",value=int(current))]
-			except (TypeError,remind.BadReminder):
-				return []
-			except ValueError:
+				choices_list = [app_commands.Choice(name=f"{current}. {rem.reason if len(rem.reason) <= 30 else rem.reason[:27]+'...'}",value=int(current))]
+				raise ValueError() #cheap way of adding the other reminders to the list lol
+			# except (TypeError,remind.BadReminder): #I honestly don't remember how would I get a TypeError
+			# 	return []
+			except (ValueError,remind.BadReminder):
 				reminders = await rd.load_autocomplete(user=interaction.user.id,reason=current,limit=25)
-				if reminders is None: return []
-				return [app_commands.Choice(name=f"{rem.id}. {rem.reason if len(rem.reason) <= 30 else rem.reason[:27]+'...'}",value=rem.id) for rem in reminders]
+				choices_list += [app_commands.Choice(name=f"{rem.id}. {rem.reason if len(rem.reason) <= 30 else rem.reason[:27]+'...'}",value=rem.id) for rem in reminders]
+		return choices_list
 
 class ReminderPaginator(ui.View):
 	index = 0
@@ -51,7 +49,7 @@ class ReminderPaginator(ui.View):
 			return
 		async with remind.Reader() as rd:
 			try:
-				self.pages = await rd.load_all_user_reminders_id(user=user,order_by='id') or [] #make type checker happy
+				self.pages = await rd.load_all_user_reminders_id(user=user,order_by='id')
 				if not self.pages:
 					raise remind.BadReminder()
 				rem = await remind.check_remind(user=user,id=id)

@@ -14,25 +14,23 @@ if TYPE_CHECKING:
 
 async def autocomplete_todo(interaction: discord.Interaction, current: str) -> List[app_commands.Choice[int]]:
 	async with TodoDB() as todo:
+		choices_list: List[app_commands.Choice[int]] = []
 		if current == '':
 			tasks_ids = await todo.load_all_user_todos_id(user=interaction.user.id,limit=25)
-			if tasks_ids is None:
-				return []
-			choices_list: List[app_commands.Choice[int]] = []
 			for task_id in tasks_ids:
 				task_info = await todo.load_todo(user=interaction.user.id,id=task_id)
 				choices_list.append(app_commands.Choice(name=f"{task_id}. {task_info.reason if len(task_info.reason) <= 30 else task_info.reason[:27]+'...'}",value=task_id))
-			return choices_list
 		else:
 			try:
 				task_info = await todo.load_todo(user=interaction.user.id,id=int(current))
-				return [app_commands.Choice(name=f"{current}. {task_info.reason if len(task_info.reason) <= 30 else task_info.reason[:27]+'...'}",value=int(current))]
-			except NoTodoFound:
-				return []
-			except ValueError:
+				choices_list = [app_commands.Choice(name=f"{current}. {task_info.reason if len(task_info.reason) <= 30 else task_info.reason[:27]+'...'}",value=int(current))]
+				raise ValueError() #cheap way of adding the other todos to the list lol
+			# except NoTodoFound: #this would return [] even if a task name is literally just a number or if `current` is just a number
+			# 	return []
+			except (ValueError,NoTodoFound):
 				tasks_todo = await todo.load_autocomplete(user=interaction.user.id,reason=current,limit=25)
-				if tasks_todo is None: return []
-				return [app_commands.Choice(name=f"{task.id}. {task.reason if len(task.reason) <= 30 else task.reason[:27]+'...'}",value=task.id) for task in tasks_todo]
+				choices_list += [app_commands.Choice(name=f"{task.id}. {task.reason if len(task.reason) <= 30 else task.reason[:27]+'...'}",value=task.id) for task in tasks_todo]
+		return choices_list
 
 class TodoPaginator(ui.View):
 	index = 0
@@ -55,7 +53,7 @@ class TodoPaginator(ui.View):
 			return
 		async with TodoDB() as todo:
 			try:
-				self.pages = await todo.load_all_user_todos_id(user=user) or [] #make type checker happy
+				self.pages = await todo.load_all_user_todos_id(user=user)
 				if not self.pages:
 					raise NoTodoFound()
 				t = await todo.load_todo(user=user,id=id)
@@ -257,7 +255,7 @@ class TODOCog(commands.GroupCog,name='task'):
 		async with TodoDB() as todo:
 			try:
 				all_todos = await todo.load_all_user_todos_id(user=interaction.user.id)
-				assert all_todos is not None, 'You have no tasks saved'
+				assert all_todos, 'You have no tasks saved'
 				t = await todo.load_todo(user=interaction.user.id,id=all_todos[0])
 				embed.title = 'Task found'
 				embed.description = f'**TODO {interaction.user.mention}:**\n ```\n{t.reason}\n```'

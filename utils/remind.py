@@ -3,6 +3,8 @@ import aiosqlite
 from utils.userVoted import has_user_voted
 from typing import List, Self, Optional
 
+#This was made a long while ago so even though this works, it may not be the best code out there
+
 class Reminder:
 	def __init__(self,user: int, timestamp: int, reason: str, channel: int, id: int, jump_url: Optional[str] = None) -> None:
 		self.user = user
@@ -112,7 +114,7 @@ class Reader:
 		results = await self.cursor.fetchall()
 		return [result[0] for result in results]
 
-	async def load_timestamp(self,actual_time: int) -> Optional[List[Reminder]]:
+	async def load_timestamp(self,actual_time: int) -> List[Reminder]:
 		await self.cursor.execute("""
 		SELECT * FROM usuarios
 		WHERE timestamp - ? < 12
@@ -128,21 +130,21 @@ class Reader:
 		results = await self.cursor.fetchall()
 		return [Reminder(*result) for result in results]
 
-	async def load_all_user_reminders(self, user: int, limit: int = -1) -> Optional[List[Reminder]]:
+	async def load_all_user_reminders(self, user: int, limit: int = -1) -> List[Reminder]:
 		await self.cursor.execute("""
 		SELECT * FROM usuarios
 		WHERE user = ? ORDER BY id LIMIT ?
 		""",(user,limit))
 		results = await self.cursor.fetchall()
-		return [Reminder(*result) for result in results] if results != [] else None
+		return [Reminder(*result) for result in results]
 	
-	async def load_autocomplete(self, user: int, reason: str, limit: int  =-1) -> Optional[List[Reminder]]:
+	async def load_autocomplete(self, user: int, reason: str, limit: int  =-1) -> List[Reminder]:
 		await self.cursor.execute("""
 		SELECT * FROM usuarios
 		WHERE user = ? AND reason LIKE ? LIMIT ?
 		""",(user,'%'+reason+'%',limit))
 		results = await self.cursor.fetchall()
-		return [Reminder(*result) for result in results] if results != [] else None
+		return [Reminder(*result) for result in results]
 
 async def add_remind(user: int,channel_id: Optional[int],reason: str, timestamp: int, jump_url: Optional[str] = None) -> Reminder:
 	if channel_id is None:
