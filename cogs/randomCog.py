@@ -292,6 +292,23 @@ class RandomCog(commands.Cog):
 			await interaction.response.send_message("Please don't spam this command :(",ephemeral=True)
 		else: raise error
 
+	@app_commands.allowed_installs(guilds=True,users=True)
+	@app_commands.allowed_contexts(guilds=True,dms=True,private_channels=True)
+	@app_commands.command(name='about')
+	async def about_bot(self, interaction: discord.Interaction):
+		"""Information about UtilsBot"""
+		e = discord.Embed(title='About UtilsBot!',
+						description='UtilsBot is an open-source bot that serves quality of life features.\n This bot is and will always be free to use.',
+						color=0xff0000) #red
+		e.add_field(name=':bar_chart: Server Count',value=f'{len(self.bot.guilds)}',inline=False)
+		e.add_field(name=':man_raising_hand: Approx. Individual User Count',value=f'{(await self.bot.application_info()).approximate_user_install_count or 0}',inline=False)
+		e.add_field(name=':scroll: Author',value='[.guimx](https://guimx.me)',inline=False)
+		e.add_field(name=':globe_with_meridians: Add App URL',value='[URL](https://discord.com/oauth2/authorize?client_id=778785822828265514)',inline=False)
+		e.add_field(name=f'{self.bot.custom_emojis.github} Source Code',value='[GitHub](https://github.com/UnaPepsi/UtilsBot)',inline=False)
+		e.add_field(name=':man_police_officer: ToS',value='https://guimx.me/rbot/tos',inline=False)
+		e.add_field(name=':detective: Privacy Policy',value='https://guimx.me/rbot/privacypolicy',inline=False)
+		await interaction.response.send_message(embed=e)
+
 	@commands.command(name='mrl')
 	async def reload_module(self, ctx: commands.Context):
 		if ctx.author.id != 624277615951216643:

@@ -295,8 +295,8 @@ class EmbedPrompt(discord.ui.Modal,title='Edit the embed!'):
 		label = 'Title URL',style=discord.TextStyle.short,
 		required = False,placeholder = 'Must be HTTP(S) format')
 	color_ = discord.ui.TextInput(
-		label= 'Color',style=discord.TextStyle.short,
-		required=False,placeholder='Must be Hex[#FFFFFF] or RGB[255,255,255] (some common colors such as "red" are fine)'
+		label= 'Color',style=discord.TextStyle.long,
+		required=False,placeholder='Must be Hex (#FFFFFF) or RGB (255,255,255). Some common colors such as "red" or "white" are fine'
 	)
 	def __init__(self, place_holders: dict[str,Any]):
 		super().__init__()

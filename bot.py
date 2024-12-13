@@ -28,8 +28,6 @@ console_handler = logging.StreamHandler()
 console_handler.setFormatter(formatter)
 logger.addHandler(console_handler)
 
-discord.utils.setup_logging(handler=console_handler)
-
 class UtilsBot(commands.Bot):
 	def __init__(self,intents: Intents,activity: Optional[BaseActivity] = None) -> None:
 		super().__init__(command_prefix=commands.when_mentioned_or('ub'),intents=intents,activity=activity,help_command=None)
@@ -42,11 +40,13 @@ class UtilsBot(commands.Bot):
 		asyncio.gather(*tasks)
 		await self.load_extension('jishaku')
 		self.add_dynamic_items(GiveawayJoinDynamicButton)
+		emojis = {e.name:e for e in await self.fetch_application_emojis()}
 		self.custom_emojis = MyEmojis(
-			youtube=await self.fetch_application_emoji(1304848067723530260),
-			spotify=await self.fetch_application_emoji(1304848325887135795),
-			apple_music=await self.fetch_application_emoji(1304848409596919848),
-			shazam=await self.fetch_application_emoji(1304848463481147443)
+			youtube = emojis['youtube'],
+			spotify = emojis['spotify'],
+			apple_music = emojis['apple_music'],
+			shazam = emojis['shazam'],
+			github = emojis['github']
 		)
 	
 	async def load_extensions(self, ext: str) -> None:
@@ -63,9 +63,10 @@ class MyEmojis:
 	spotify: Emoji
 	apple_music: Emoji
 	shazam: Emoji
-
+	github: Emoji
 
 if __name__ == '__main__':
+	discord.utils.setup_logging(handler=console_handler)
 	bot = UtilsBot(intents=Intents(dm_messages = True, guild_messages = True,guilds = True),activity=CustomActivity(name=environ['ACTIVITY']))
 	try:
 		asyncio.run(bot.start(environ['TOKEN']))
