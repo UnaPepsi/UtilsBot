@@ -359,7 +359,7 @@ class CECog(commands.GroupCog,name='embed'):
 
 	@app_commands.command(name='create',description='Creates a custom embed!')
 	async def create_embed(self, interaction: discord.Interaction):
-		if isinstance(interaction.user,discord.Member) and (not interaction.user.resolved_permissions or not interaction.user.resolved_permissions.manage_messages):
+		if isinstance(interaction.user,discord.Member) and not interaction.permissions.manage_messages:
 			raise app_commands.MissingPermissions(['manage_messages'])
 		await interaction.response.send_message(embed=default_embed,view=EmbedMaker(interaction.user))
 	
@@ -390,7 +390,7 @@ class CECog(commands.GroupCog,name='embed'):
 		if not public and not interaction.is_guild_integration():
 			await interaction.response.send_message('For `public` to be false, you must run this command in a server where I am',ephemeral=True)
 			return
-		if isinstance(interaction.user,discord.Member) and (not interaction.user.resolved_permissions or not interaction.user.resolved_permissions.manage_messages):
+		if isinstance(interaction.user,discord.Member) and not interaction.permissions.manage_messages:
 			raise app_commands.MissingPermissions(['manage_messages'])
 			
 		if interaction.channel is None or isinstance(interaction.channel,(discord.ForumChannel,discord.CategoryChannel)):

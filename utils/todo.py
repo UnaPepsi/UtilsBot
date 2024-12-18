@@ -1,11 +1,17 @@
 import aiosqlite
 from typing import Self, List
 from utils.userVoted import has_user_voted
+from dataclasses import dataclass
 
 class NoTodoFound(Exception): ...
 class BadTodo(Exception): ...
 
+@dataclass
 class Todo:
+	user: int
+	id: int
+	timestamp: int
+	reason: str
 	def __init__(self,user: int, id: int, timestamp: int, reason: str):
 		self.user = user
 		self.id = id

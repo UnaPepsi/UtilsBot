@@ -2,17 +2,18 @@ import time
 import aiosqlite
 from utils.userVoted import has_user_voted
 from typing import List, Self, Optional
+from dataclasses import dataclass
 
 #This was made a long while ago so even though this works, it may not be the best code out there
 
+@dataclass
 class Reminder:
-	def __init__(self,user: int, timestamp: int, reason: str, channel: int, id: int, jump_url: Optional[str] = None) -> None:
-		self.user = user
-		self.timestamp = timestamp
-		self.reason = reason
-		self.channel = channel
-		self.id = id
-		self.jump_url = jump_url
+	user: int
+	timestamp: int
+	reason: str
+	channel: int
+	id: int
+	jump_url: Optional[str] = None
 
 class BadReminder(Exception): ...
 class ReminderNotValid(BadReminder):

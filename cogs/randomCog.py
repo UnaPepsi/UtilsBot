@@ -6,7 +6,7 @@ from utils.bypassUrl import bypass
 from utils.websiteSS import get_ss, BadURL, BadResponse
 from utils.dearrow import dearrow, VideoNotFound
 from utils import animalapi, translate
-from typing import Literal, Sequence, Optional, List, TYPE_CHECKING
+from typing import Literal, Optional, List, TYPE_CHECKING
 import os
 import logging
 from time import perf_counter
@@ -105,14 +105,14 @@ class RandomCog(commands.Cog):
 	@app_commands.allowed_contexts(guilds=True,dms=True,private_channels=True)
 	@app_commands.checks.cooldown(2,10,key=lambda i: i.user.id)
 	async def remove_clickbait(self, interaction: discord.Interaction, msg: discord.Message):
-		if (vid_re := re.search(r'(?P<url>http(s)?:\/\/(w{3}\.)?(youtu.be\/|youtube.com\/watch\?v=))(?P<video_id>.*)',msg.content)) is None:
+		if (vid_re := re.search(r'(?P<url>http(s)?:\/\/(w{3}\.)?(youtu.be\/|youtube.com\/watch\?v=))(?P<video_id>[\w-]+)',msg.content)) is None:
 			await interaction.response.send_message(
 			'Message must contain a valid YouTube video link. Example links:\n'
 			'`https://www.youtube.com/watch?v=6NQHtVrP3gE\n'+
 			'https://youtu.be/6NQHtVrP3gE`')
 			return
-		ephemeral = not isinstance(interaction.user,discord.User) and interaction.user.resolved_permissions is not None and not interaction.user.resolved_permissions.embed_links
-		await interaction.response.defer(ephemeral=True)
+		ephemeral = not isinstance(interaction.user,discord.User) and not interaction.permissions.embed_links
+		await interaction.response.defer(ephemeral=ephemeral)
 		try:
 			d = await dearrow(vid_re.group('video_id'))
 		except VideoNotFound as e:
@@ -144,7 +144,7 @@ class RandomCog(commands.Cog):
 		if not content or not content.split():
 			await interaction.response.send_message("Couldn't translate that message. Is there content there?")
 			return
-		ephemeral = not isinstance(interaction.user,discord.User) and interaction.user.resolved_permissions is not None and not interaction.user.resolved_permissions.embed_links
+		ephemeral = not isinstance(interaction.user,discord.User) and not interaction.permissions.embed_links
 		await interaction.response.defer(ephemeral=ephemeral)
 		try:
 			translation = await translate.translate_google(target=interaction.locale.value,q=content)
@@ -209,7 +209,7 @@ class RandomCog(commands.Cog):
 		if len(suggestion) > 4000:
 			await interaction.response.send_message("A suggestion can't be larger than 4000 characters :<",ephemeral=True)
 			return
-		owner = await self.bot.fetch_user(624277615951216643)
+		owner = await self.bot.fetch_user(int(os.environ['OWNER_ID']))
 		embed = discord.Embed(
 			title = 'New suggestion!',
 			description=suggestion,
@@ -234,7 +234,7 @@ class RandomCog(commands.Cog):
 		if isinstance(interaction.channel,(discord.DMChannel,discord.GroupChannel)) or not interaction.channel.is_nsfw():
 			await interaction.response.send_message('This command is only available for channels with NSFW enabled')
 			return
-		ephemeral = not isinstance(interaction.user,discord.User) and interaction.user.resolved_permissions is not None and not interaction.user.resolved_permissions.embed_links
+		ephemeral = not isinstance(interaction.user,discord.User) and not interaction.permissions.embed_links
 		await interaction.response.defer(ephemeral=ephemeral)
 		height = int(resolution[:-1])
 		width = int(height*(16/9))
@@ -311,7 +311,7 @@ class RandomCog(commands.Cog):
 
 	@commands.command(name='mrl')
 	async def reload_module(self, ctx: commands.Context):
-		if ctx.author.id != 624277615951216643:
+		if not await self.bot.is_owner(ctx.author): #useless but just incase
 			return
 		logger.info('Attempting to reload everything')
 		await ctx.send('trying')
@@ -328,7 +328,7 @@ class RandomCog(commands.Cog):
 	@commands.command(name='rl')
 	@commands.is_owner()
 	async def reload_ext(self, ctx: commands.Context, ext: str):
-		if ctx.author.id != 624277615951216643: #useless but just incase
+		if not await self.bot.is_owner(ctx.author): #useless but just incase
 			logger.warning(f'{ctx.author.id} somehow got here')
 			return
 		async def rl_ext(ext: str) -> None:
@@ -344,6 +344,14 @@ class RandomCog(commands.Cog):
 					await rl_ext(file[:-3])
 		else:
 			await rl_ext(ext)
+
+	@commands.command(name='botsync')
+	@commands.is_owner()
+	async def sync_slash_commands(self, ctx: commands.Context):
+		if not await self.bot.is_owner(ctx.author): #useless but just in case
+			return
+		await self.bot.tree.sync()
+		await ctx.send("synced")
 		
 	@reload_ext.error
 	async def reload_bad_command(self, ctx: commands.Context, error: commands.CommandError):

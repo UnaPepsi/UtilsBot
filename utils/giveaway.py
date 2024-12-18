@@ -1,19 +1,20 @@
 import aiosqlite
-from typing import Self, List, Union, Dict, Tuple
+from typing import Self, List, Union, Dict
+from dataclasses import dataclass
 
+@dataclass
 class Giveaway:
-	def __init__(self, id: int, channel_id: int, timestamp: int, prize: str, winners: int, hoster_id: int) -> None:
-		self.id = id
-		self.channel_id = channel_id
-		self.timestamp = timestamp
-		self.prize = prize
-		self.winners = winners
-		self.hoster_id = hoster_id
+	id: int
+	channel_id: int
+	timestamp: int
+	prize: str
+	winners: int
+	hoster_id: int
 
+@dataclass
 class Participant:
-	def __init__(self, participant_id: int, giveaway_id: int) -> None:
-		self.participant_id = participant_id
-		self.giveaway_id = giveaway_id
+	participant_id: int
+	giveaway_id: int
 
 class GiveawayDB:
 
@@ -49,16 +50,14 @@ class GiveawayDB:
 		)
 		""")
 
-	async def fetch_participants(self,*,giveaway_id: int) -> List[Tuple[int,str]]:
+	async def fetch_participants(self,*,giveaway_id: int) -> List[int]:
 		await self.cursor.execute("""
-		SELECT DISTINCT participants.participant_id, giveaways.prize 
-		FROM giveaways
-		INNER JOIN participants ON giveaways.id = participants.giveaway_id
-		WHERE participants.giveaway_id = ?
+		SELECT DISTINCT participant_id FROM participants
+		WHERE giveaway_id = ?
 		""",(giveaway_id,))
 		results = await self.cursor.fetchall()
-		assert results != [], 'No participants'
-		return results #type: ignore
+		assert results, 'No participants'
+		return [result[0] for result in results]
 	
 	async def fetch_giveaway(self,*,giveaway_id: int) -> Giveaway:
 		await self.cursor.execute("""

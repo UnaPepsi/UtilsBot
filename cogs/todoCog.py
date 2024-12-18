@@ -172,7 +172,7 @@ class TODOCog(commands.GroupCog,name='task'):
 		Args:
 			reason (str): The reason of your task
 		"""
-		ephemeral = not isinstance(interaction.user,discord.User) and interaction.user.resolved_permissions is not None and not interaction.user.resolved_permissions.embed_links
+		ephemeral = not isinstance(interaction.user,discord.User) and not interaction.permissions.embed_links
 		await interaction.response.defer(ephemeral=ephemeral)
 		embed = discord.Embed()
 		async with TodoDB() as todo:
@@ -203,7 +203,7 @@ class TODOCog(commands.GroupCog,name='task'):
 		Args:
 			id (int): The ID of your task to remove
 		"""
-		ephemeral = not isinstance(interaction.user,discord.User) and interaction.user.resolved_permissions is not None and not interaction.user.resolved_permissions.embed_links
+		ephemeral = not isinstance(interaction.user,discord.User) and not interaction.permissions.embed_links
 		await interaction.response.defer(ephemeral=ephemeral)
 		embed = discord.Embed()
 		async with TodoDB() as todo:

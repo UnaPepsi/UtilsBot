@@ -32,6 +32,9 @@ class UtilsBot(commands.Bot):
 	def __init__(self,intents: Intents,activity: Optional[BaseActivity] = None) -> None:
 		super().__init__(command_prefix=commands.when_mentioned_or('ub'),intents=intents,activity=activity,help_command=None)
 
+	async def is_owner(self, user: discord.abc.User): #useless but just in case
+		return environ['OWNER_ID'] == str(user.id)
+
 	async def setup_hook(self) -> None:
 		tasks = []
 		for item in listdir('cogs'):

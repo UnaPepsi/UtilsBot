@@ -3,18 +3,102 @@ from discord.ext import commands, tasks
 from discord import app_commands, ui
 from datetime import datetime
 import re
-from utils.giveaway import GiveawayDB, Giveaway, Participant
+from utils.giveaway import GiveawayDB, Giveaway
 from utils import sm_utils
 from time import time
 import asyncio
 from random import randint
 from utils.userVoted import has_user_voted
-from typing import List, Tuple, TYPE_CHECKING
+from typing import List, Optional, Union, TYPE_CHECKING
 import logging
 logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
 	from bot import UtilsBot
+
+class GiveawayEndedOverviewView(ui.View):
+	def __init__(self, *, hoster_id: int, participants: List[int], winners: List[int], timeout: Optional[Union[int,float]] = None):
+		self.hoster_id = hoster_id
+		self.participants = participants
+		self.winners = winners
+		super().__init__(timeout=timeout)
+	
+	@ui.button(label='Winners',style=discord.ButtonStyle.green,emoji='\N{CROWN}')
+	async def winners_overview(self, interaction: discord.Interaction, button: ui.Button):
+		embed = discord.Embed(
+			title = 'Page 1' if len(self.winners) > 8 else None,
+			description = '\n'.join(f'- <@{winner_id}>' for winner_id in (self.winners[:8] if len(self.winners) > 8 else self.winners)),
+			color = discord.Color.green()
+		)
+		view = GiveawayPaginator(itr=self.winners,timeout=300) if len(self.winners) > 8 else discord.utils.MISSING
+		await interaction.response.send_message(embed=embed,view=view,ephemeral=True)
+	
+	@ui.button(label='Reroll',style=discord.ButtonStyle.danger,emoji='\N{ANTICLOCKWISE DOWNWARDS AND UPWARDS OPEN CIRCLE ARROWS}') #lmao
+	async def reroll_giveaway(self, interaction: discord.Interaction, button: ui.Button):
+		if interaction.user.id != self.hoster_id and not interaction.permissions.manage_messages:
+			await interaction.response.send_message('Only the hoster and people with `Manage Messages` can reroll this giveaway',ephemeral=True)
+			return
+		participants_who_didnt_win = list(filter(lambda x: x not in self.winners, self.participants))
+		if len(participants_who_didnt_win) < len(self.winners):
+			await interaction.response.send_message('Not enough participants to reroll the giveaway :(',ephemeral=True)
+			return
+		new_winners = [participants_who_didnt_win.pop(randint(0,len(participants_who_didnt_win)-1)) for _ in range(len(self.winners))]
+		await interaction.response.edit_message(content=f'Giveaway has been rerolled! <t:{int(time())}:R>',
+			view=GiveawayEndedOverviewView(hoster_id=self.hoster_id,participants=self.participants,winners=new_winners))
+		self.stop()
+
+	@ui.button(label='Participants',style=discord.ButtonStyle.green,emoji='\N{HAPPY PERSON RAISING ONE HAND}')
+	async def participants_overview(self, interaction: discord.Interaction, button: ui.Button):
+		embed = discord.Embed(
+			title = 'Page 1' if len(self.participants) > 8 else None,
+			description = '\n'.join(f'- <@{participant_id}>' for participant_id in (self.participants[:8] if len(self.participants) > 8 else self.participants)),
+			color = discord.Color.green()
+		)
+		view = GiveawayPaginator(itr=self.participants,timeout=300) if len(self.participants) > 8 else discord.utils.MISSING
+		await interaction.response.send_message(embed=embed,view=view,ephemeral=True)
+
+class GiveawayPaginator(ui.View):
+	index = 0
+	def __init__(self, itr: List[int], timeout: Optional[Union[int,float]] = None):
+		self.chunked = list(discord.utils.as_chunks(itr,8))
+		logger.debug(self.chunked)
+		super().__init__(timeout=timeout)
+		self.edit_children()
+
+	def edit_children(self):
+		self.go_first.disabled = self.index == 0
+		self.go_back.disabled = self.index == 0
+		self.go_foward.disabled = self.index == len(self.chunked)-1
+		self.go_last.disabled = self.index == len(self.chunked)-1
+
+	async def edit_embed(self, interaction: discord.Interaction):
+		embed = discord.Embed(
+			title = f'Page {self.index+1}',
+			description = '\n'.join(f'- <@{user_id}>' for user_id in self.chunked[self.index]),
+			color = discord.Color.green()
+		)
+		self.edit_children()
+		await interaction.response.edit_message(embed=embed,view=self)
+
+	@ui.button(label='<<',style=discord.ButtonStyle.primary)
+	async def go_first(self, interaction: discord.Interaction, button: ui.Button):
+		self.index = 0
+		await self.edit_embed(interaction)
+
+	@ui.button(label='<',style=discord.ButtonStyle.secondary)
+	async def go_back(self, interaction: discord.Interaction, button: ui.Button):
+		self.index -= 1
+		await self.edit_embed(interaction)
+
+	@ui.button(label='>',style=discord.ButtonStyle.secondary)
+	async def go_foward(self, interaction: discord.Interaction, button: ui.Button):
+		self.index += 1
+		await self.edit_embed(interaction)
+
+	@ui.button(label='>>',style=discord.ButtonStyle.primary)
+	async def go_last(self, interaction: discord.Interaction, button: ui.Button):
+		self.index = len(self.chunked)-1
+		await self.edit_embed(interaction)
 
 class GiveawayJoinDynamicButton(ui.DynamicItem[ui.Button],template=r'giveaway_join:channel_id:(?P<id>[0-9]+)'):
 	def __init__(self, channel_id: int):
@@ -120,7 +204,7 @@ class GiveawayModal(ui.Modal,title='Creates a giveaway!'):
 		)
 		_duration = ui.TextInput(
 			label = 'Duration',style=discord.TextStyle.short,
-			placeholder='Use formats such as: 1h30m, 2hours 5m',required=True,
+			placeholder='Use formats such as: 1h30m, 2hours, 5m',required=True,
 			max_length=15
 		)
 		_winners = ui.TextInput(
@@ -146,13 +230,13 @@ class GiveawayModal(ui.Modal,title='Creates a giveaway!'):
 			else:
 				try: when = int(sm_utils.parse_duration(self._duration.value).total_seconds())
 				except ValueError:
-					await interaction.response.send_message('Duration invalid, if keeps failing you could try with a timestamp',ephemeral=True)
+					await interaction.response.send_message('Duration invalid, if it keeps failing you could try with a timestamp',ephemeral=True)
 					return
-			if (when-int(time()))/86400 > 30:
-				await interaction.response.send_message("A maximum of 1 month only",ephemeral=True)
+			if when/86400 > 150:
+				await interaction.response.send_message("A maximum of 150 days (around 5 months) only",ephemeral=True)
 				return
-			elif when < 30:
-				await interaction.response.send_message('Duration cannot be less than 30 seconds',ephemeral=True)
+			elif when < 15:
+				await interaction.response.send_message('Duration cannot be less than 15 seconds',ephemeral=True)
 				return
 			embed = discord.Embed(
 				title = self._prize.value,
@@ -197,7 +281,7 @@ class GiveawayCog(commands.GroupCog,name='giveaway'):
 			return
 		task_list = []
 		for item in items:
-			task_list.append(asyncio.create_task(self.send_giveaways(item)))
+			task_list.append(asyncio.create_task(self.send_giveaway(item)))
 		await asyncio.gather(*task_list)
 	
 	@loop_check.before_loop
@@ -225,12 +309,12 @@ class GiveawayCog(commands.GroupCog,name='giveaway'):
 				return
 			logger.debug(f'giveaway {payload.message_id} deleted')
 
-	async def send_giveaways(self, item: Giveaway):
+	async def send_giveaway(self, item: Giveaway):
 		async def delgiveaway():
 			try:
 				async with GiveawayDB() as gw:
 					await gw.delete_giveaway(giveaway_id=item.id)
-			except AssertionError as e:
+			except AssertionError:
 				return
 		await asyncio.sleep(item.timestamp-time())
 		try:
@@ -238,19 +322,17 @@ class GiveawayCog(commands.GroupCog,name='giveaway'):
 			channel = await self.bot.fetch_channel(item.channel_id)
 			msg: discord.Message = await channel.fetch_message(item.id) #type: ignore
 			embed = msg.embeds[0]
-			if embed is None or embed.description is None:
-				raise TypeError()
+			assert embed and embed.description
 			parts = embed.description.rsplit('Ends',)
 			embed.description = 'Ended'.join(parts)
-		except (discord.HTTPException,discord.Forbidden,discord.NotFound,discord.InvalidData,TypeError):
+		except (discord.HTTPException,discord.Forbidden,discord.NotFound,discord.InvalidData,AssertionError):
 			await delgiveaway()
 			return
 		try:
 			async with GiveawayDB() as gw:
-				participants: List[Tuple[int,str]] = await gw.fetch_participants(giveaway_id=item.id)
-				if len(participants) < item.winners:
-					raise AssertionError('Not enough participants')
-		except AssertionError as e:
+				participants: List[int] = await gw.fetch_participants(giveaway_id=item.id)
+				assert len(participants) >= item.winners, 'Not enough participants'
+		except AssertionError:
 			try:
 				await msg.reply("Not enough participants to choose a winner :(")
 				await msg.edit(embed=embed,view=None)
@@ -261,16 +343,10 @@ class GiveawayCog(commands.GroupCog,name='giveaway'):
 				return
 		else:
 			try:
-				winners = ''
-				prize = participants[0][1]
-				for _ in range(item.winners):
-					if len(participants) != 0:
-						rand = randint(0,len(participants)-1)
-						winners += f'<@{participants.pop(rand)[0]}> '
-					else:
-						logger.debug("No more winners")
-						winners += f'<@{participants.pop(0)[0]}> '
-				await msg.reply(f"The giveaway for `{prize}` has ended! Winners: {winners}")
+				participants_copy = participants.copy()					
+				winners = [participants.pop(randint(0,len(participants)-1)) for _ in range(item.winners)]
+				view = GiveawayEndedOverviewView(hoster_id=item.hoster_id,participants=participants_copy,winners=winners,timeout=3600*24*7) #7 days
+				await msg.reply(content=f':tada: Giveaway for `{item.prize}` has ended! :tada: Click below for more information',view=view)
 				await msg.edit(embed=embed,view=None)
 				await delgiveaway()
 			except (discord.Forbidden,discord.HTTPException):
@@ -279,6 +355,7 @@ class GiveawayCog(commands.GroupCog,name='giveaway'):
 
 		
 	@app_commands.command(name='create',description='Creates a giveaway!')
+	@app_commands.guild_only()
 	@app_commands.checks.has_permissions(manage_messages=True)
 	async def create_giveaway(self, interaction: discord.Interaction):
 		await interaction.response.send_modal(GiveawayModal())
@@ -310,7 +387,7 @@ class GiveawayCog(commands.GroupCog,name='giveaway'):
 			except AssertionError:
 				await interaction.response.send_message('Hmm... giveaway not found, remember the `id` is the `id` of the giveaway message',ephemeral=True)
 				return
-			if giveaway.hoster_id != interaction.user.id and not interaction.user.guild_permissions.manage_messages:
+			if giveaway.hoster_id != interaction.user.id and not interaction.permissions.manage_messages:
 				await interaction.response.send_message("Only people with `Manage Messages` or the Giveaway hoster can remove this giveaway",ephemeral=True)
 				return
 			message = None
@@ -339,9 +416,10 @@ class GiveawayCog(commands.GroupCog,name='giveaway'):
 			# await gw.delete_giveaway(giveaway_id=id) on message delete already handles this
 			await interaction.response.send_message('Giveaway deleted! You can also delete giveaways by deleting the message itself',ephemeral=True)
 
+	@commands.is_owner()
 	@commands.command(name='check')
 	async def checkgiveaway(self, ctx: commands.Context):
-		if ctx.author.id != 624277615951216643:
+		if not await self.bot.is_owner(ctx.author): #useless but just in case
 			return
 		async with GiveawayDB() as gw:
 			a = await gw.select_all()

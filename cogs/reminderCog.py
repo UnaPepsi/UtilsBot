@@ -188,7 +188,7 @@ class SetReminderModal(ui.Modal,title='Set a reminder for this message'):
 
 	async def on_submit(self, interaction: discord.Interaction):
 		if interaction.channel is None: return
-		ephemeral = not isinstance(interaction.user,discord.User) and interaction.user.resolved_permissions is not None and not interaction.user.resolved_permissions.embed_links
+		ephemeral = not isinstance(interaction.user,discord.User) and not interaction.permissions.embed_links
 		await interaction.response.defer(thinking=True,ephemeral=ephemeral)
 		embed = discord.Embed()
 		try:
@@ -293,16 +293,10 @@ class RemindCog(commands.GroupCog,name='reminder'):
 		if not self.bot.is_ready():
 			await self.bot.wait_until_ready()
 
-	@commands.command()
-	async def botsync(self, ctx: commands.Context):
-		if ctx.author.id != 624277615951216643:
-			return
-		await ctx.send("synced")
-		await self.bot.tree.sync()
-
+	@commands.is_owner()
 	@commands.command()
 	async def add(self, ctx: commands.Context,user: int, timestamp: int, channel_id: int, id: int, *reason: str):
-		if ctx.author.id != 624277615951216643:
+		if not await self.bot.is_owner(ctx.author): #useless but just in case
 			return
 		reason_str = ' '.join(reason)
 		await remind.manual_add(user=user,channel_id=channel_id,reason=reason_str,timestamp=timestamp,id=id)
@@ -318,7 +312,7 @@ class RemindCog(commands.GroupCog,name='reminder'):
 			reason (str): Your reminder's reason
 			when (str): When to remind you (e.g. 1d3h 5m30s 1w5d)
 		"""
-		ephemeral = not isinstance(interaction.user,discord.User) and interaction.user.resolved_permissions is not None and not interaction.user.resolved_permissions.embed_links
+		ephemeral = not isinstance(interaction.user,discord.User) and not interaction.permissions.embed_links
 		await interaction.response.defer(ephemeral=ephemeral)
 		channel_id = None
 		if interaction.is_guild_integration(): channel_id = interaction.channel_id
@@ -363,7 +357,7 @@ class RemindCog(commands.GroupCog,name='reminder'):
 		Args:
 			id (int): The ID of the reminder to remove
 		"""
-		ephemeral = not isinstance(interaction.user,discord.User) and interaction.user.resolved_permissions is not None and not interaction.user.resolved_permissions.embed_links
+		ephemeral = not isinstance(interaction.user,discord.User) and not interaction.permissions.embed_links
 		await interaction.response.defer(ephemeral=ephemeral)
 		embed = discord.Embed()
 		try:
@@ -423,7 +417,7 @@ class RemindCog(commands.GroupCog,name='reminder'):
 		if not reason and not when:
 			await interaction.response.send_message('You must edit one or both of the parameters',ephemeral=True)
 			return
-		ephemeral = not isinstance(interaction.user,discord.User) and interaction.user.resolved_permissions is not None and not interaction.user.resolved_permissions.embed_links
+		ephemeral = not isinstance(interaction.user,discord.User) and not interaction.permissions.embed_links
 		await interaction.response.defer(ephemeral=ephemeral)
 		embed = discord.Embed()
 		try:
@@ -455,7 +449,7 @@ class RemindCog(commands.GroupCog,name='reminder'):
 		async with remind.Reader() as rd:
 			all_reminders = await rd.load_all_user_reminders_id(user=interaction.user.id,order_by='id')
 		try:
-			assert all_reminders != [], 'You have no tasks saved'
+			assert all_reminders != [], 'You have no reminders saved'
 			rem = await remind.check_remind(user=interaction.user.id,id=all_reminders[0])
 			embed = discord.Embed()
 			embed.title = 'Reminder found'
