@@ -23,16 +23,6 @@ class GiveawayEndedOverviewView(ui.View):
 		self.winners = winners
 		super().__init__(timeout=timeout)
 	
-	@ui.button(label='Winners',style=discord.ButtonStyle.green,emoji='\N{CROWN}')
-	async def winners_overview(self, interaction: discord.Interaction, button: ui.Button):
-		embed = discord.Embed(
-			title = 'Page 1' if len(self.winners) > 8 else None,
-			description = '\n'.join(f'- <@{winner_id}>' for winner_id in (self.winners[:8] if len(self.winners) > 8 else self.winners)),
-			color = discord.Color.green()
-		)
-		view = GiveawayPaginator(itr=self.winners,timeout=300) if len(self.winners) > 8 else discord.utils.MISSING
-		await interaction.response.send_message(embed=embed,view=view,ephemeral=True)
-	
 	@ui.button(label='Reroll',style=discord.ButtonStyle.danger,emoji='\N{ANTICLOCKWISE DOWNWARDS AND UPWARDS OPEN CIRCLE ARROWS}') #lmao
 	async def reroll_giveaway(self, interaction: discord.Interaction, button: ui.Button):
 		if interaction.user.id != self.hoster_id and not interaction.permissions.manage_messages:
@@ -43,8 +33,10 @@ class GiveawayEndedOverviewView(ui.View):
 			await interaction.response.send_message('Not enough participants to reroll the giveaway :(',ephemeral=True)
 			return
 		new_winners = [participants_who_didnt_win.pop(randint(0,len(participants_who_didnt_win)-1)) for _ in range(len(self.winners))]
-		await interaction.response.edit_message(content=f'Giveaway has been rerolled! <t:{int(time())}:R>',
+		await interaction.response.send_message(content=f'Giveaway has been rerolled by {interaction.user.mention}! <t:{int(time())}:R> \nNew Winners: '+' '.join(f'<@{winner_id}>' for winner_id in new_winners),
 			view=GiveawayEndedOverviewView(hoster_id=self.hoster_id,participants=self.participants,winners=new_winners))
+		self.reroll_giveaway.disabled, self.participants_overview.disabled = True,True
+		await interaction.message.edit(view=self) #type: ignore
 		self.stop()
 
 	@ui.button(label='Participants',style=discord.ButtonStyle.green,emoji='\N{HAPPY PERSON RAISING ONE HAND}')
@@ -209,7 +201,7 @@ class GiveawayModal(ui.Modal,title='Creates a giveaway!'):
 		)
 		_winners = ui.TextInput(
 			label = 'Winners',style=discord.TextStyle.short,
-			placeholder='How many winners? (max of 20)',required=True,
+			placeholder='How many winners? (max of 50)',required=True,
 			max_length=2
 		)
 		async def on_submit(self, interaction: discord.Interaction):
@@ -226,7 +218,7 @@ class GiveawayModal(ui.Modal,title='Creates a giveaway!'):
 				return
 			c_time = int(time())
 			if self._duration.value.isdecimal():
-				when = int(self._duration.value)
+				when = int(self._duration.value) - c_time
 			else:
 				try: when = int(sm_utils.parse_duration(self._duration.value).total_seconds())
 				except ValueError:
@@ -253,8 +245,8 @@ class GiveawayModal(ui.Modal,title='Creates a giveaway!'):
 			if winners < 1:
 				await interaction.response.send_message('At least 1 person has to win something :<',ephemeral=True)
 				return
-			if winners > 20:
-				await interaction.response.send_message('You can only have a max of 20 participants per giveaway',ephemeral=True)
+			if winners > 50:
+				await interaction.response.send_message('You can only have a max of 50 participants per giveaway',ephemeral=True)
 				return
 			if embed.description is None:
 				await interaction.response.send_message('Something went wrong :(',ephemeral=True)
@@ -346,7 +338,7 @@ class GiveawayCog(commands.GroupCog,name='giveaway'):
 				participants_copy = participants.copy()					
 				winners = [participants.pop(randint(0,len(participants)-1)) for _ in range(item.winners)]
 				view = GiveawayEndedOverviewView(hoster_id=item.hoster_id,participants=participants_copy,winners=winners,timeout=3600*24*7) #7 days
-				await msg.reply(content=f':tada: Giveaway for `{item.prize}` has ended! :tada: Click below for more information',view=view)
+				await msg.reply(content=f':tada: Giveaway for `{item.prize}` has ended! :tada: \nWinners: '+' '.join(f'<@{winner_id}>' for winner_id in winners),view=view)
 				await msg.edit(embed=embed,view=None)
 				await delgiveaway()
 			except (discord.Forbidden,discord.HTTPException):

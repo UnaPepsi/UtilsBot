@@ -1,5 +1,5 @@
 import discord
-from discord import app_commands
+from discord import app_commands, ui
 from discord.ext import commands
 import re
 from datetime import datetime
@@ -50,25 +50,36 @@ async def size_check(embed: discord.Embed, *args) -> bool:
 	for arg in args:
 		embed_size += len(arg)
 	return embed_size > 6000
-class EmbedMaker(discord.ui.View):
-	def __init__(self, user_embed: Union[discord.User,discord.Member]):
-		super().__init__(timeout=7200)
-		self.user_embed = user_embed
 
-	@discord.ui.select(cls=discord.ui.Select,placeholder='Edit the embed',
-		options=[
-			discord.SelectOption(label='General Embed',emoji='\N{PAGE FACING UP}',description='Edits general values of the embed',value='general'),
-			discord.SelectOption(label='Images',emoji='\N{FRAME WITH PICTURE}',description="Edits the embed's shown images",value='img'),
-			discord.SelectOption(label='Author',emoji='\N{MEMO}',description='Edits author values',value='author'),
-			discord.SelectOption(label='Add field',emoji='<:plus_sign:1232874335107285063>',description='Adds a field to the embed',value='add'),
-			discord.SelectOption(label='Remove field',emoji='<:minus:1232879295001526292>',description='Removes a field to the embed',value='remove'),
-			discord.SelectOption(label='Edit field',emoji='\N{PENCIL}',description='Edits a field of the embed',value='edit'),
-			discord.SelectOption(label='Footer',emoji='\N{FOOT}',description='Edits the footer',value='footer'),
-		])
-	async def dropdown_menu(self, interaction: discord.Interaction, select: discord.ui.Select):
-		if interaction.user.id != self.user_embed.id:
-			await interaction.response.send_message("You're not allowed to do that",ephemeral=True)
-			return
+class EmbedMakerDropdown(ui.DynamicItem[ui.Select], template=r'ce:dp:mid:(?P<msg_id>[0-9]+):uid:(?P<user_id>[0-9]+)'):
+	def __init__(self, msg_id: int, user_id: int):
+		super().__init__(ui.Select(
+			placeholder='Edit the embed',custom_id=f'ce:dp:mid:{msg_id}:uid:{user_id}',options=[
+				discord.SelectOption(label='General Embed',emoji='\N{PAGE FACING UP}',description='Edits general values of the embed',value='general'),
+				discord.SelectOption(label='Images',emoji='\N{FRAME WITH PICTURE}',description="Edits the embed's shown images",value='img'),
+				discord.SelectOption(label='Author',emoji='\N{MEMO}',description='Edits author values',value='author'),
+				discord.SelectOption(label='Add field',emoji='<:plus_sign:1232874335107285063>',description='Adds a field to the embed',value='add'),
+				discord.SelectOption(label='Remove field',emoji='<:minus:1232879295001526292>',description='Removes a field to the embed',value='remove'),
+				discord.SelectOption(label='Edit field',emoji='\N{PENCIL}',description='Edits a field of the embed',value='edit'),
+				discord.SelectOption(label='Footer',emoji='\N{FOOT}',description='Edits the footer',value='footer')
+			]
+		))
+		self.msg_id = msg_id
+		self.user_id = user_id
+	
+	@classmethod
+	async def from_custom_id(cls, interaction: discord.Interaction, item: ui.Select, match: re.Match[str], /):
+		msg_id = int(match['msg_id'])
+		user_id = int(match['user_id'])
+		return cls(msg_id,user_id)
+
+	async def interaction_check(self, interaction: discord.Interaction):
+		if interaction.user.id != self.user_id:
+			await interaction.response.send_message('Only whoever ran this command can interact with it',ephemeral=True)
+			return False
+		return True
+	
+	async def callback(self, interaction: discord.Interaction):
 		try: embed = interaction.message.embeds[0] if interaction.message is not None else [][0]
 		except IndexError:
 			await interaction.response.send_message("Something wrong happened",ephemeral=True)
@@ -95,7 +106,7 @@ class EmbedMaker(discord.ui.View):
 			}
 		}
 		place_holders['general']['color'] = sm_utils.rgb_to_hex(embed.color.r,embed.color.g,embed.color.b) if embed.color is not None else None
-		options: dict[str,discord.ui.Modal] = {
+		options: dict[str,ui.Modal] = {
 			'general':EmbedPrompt(place_holders=place_holders["general"]),
 			'img':EmbedURL(place_holders=place_holders["img"]),
 			'author':EmbedAuthor(place_holders=place_holders["author"]),
@@ -104,36 +115,82 @@ class EmbedMaker(discord.ui.View):
 			'edit':EmbedFields.EditField(),
 			'footer':EmbedFooter(place_holders=place_holders["footer"])
 		}
-		select.placeholder = 'Edit the embed'
+		self.item.placeholder = 'Edit the embed'
 		if interaction.message is None:
 			await interaction.response.send_message('Something went wrong :(',ephemeral=True)
 			return
 		if interaction.guild:
-			await interaction.message.edit(view=self)
-		await interaction.response.send_modal(options[select.values[0]])
-	@discord.ui.button(label='Save',style=discord.ButtonStyle.green)
-	async def save(self, interaction: discord.Interaction, button: discord.ui.Button):
-		if interaction.user.id != self.user_embed.id:
-			await interaction.response.send_message("You're not allowed to do that",ephemeral=True)
-			return
+			await interaction.message.edit(view=self.view)
+		await interaction.response.send_modal(options[self.item.values[0]])
+
+class EmbedMakerSaveButton(ui.DynamicItem[ui.Button],template=r'ce:sbtn:mid:(?P<msg_id>[0-9]+):uid:(?P<user_id>[0-9]+)'):
+	def __init__(self, msg_id: int, user_id: int):
+		super().__init__(ui.Button(label='Save',style=discord.ButtonStyle.green,custom_id=f'ce:sbtn:mid:{msg_id}:uid:{user_id}'))
+		self.msg_id = msg_id
+		self.user_id = user_id
+
+	@classmethod
+	async def from_custom_id(cls, interaction: discord.Interaction, item: ui.Button, match: re.Match[str], /):
+		msg_id = int(match['msg_id'])
+		user_id = int(match['user_id'])
+		return cls(msg_id,user_id)
+
+	async def interaction_check(self, interaction: discord.Interaction):
+		if interaction.user.id != self.user_id:
+			await interaction.response.send_message('Only whoever ran this command can interact with it',ephemeral=True)
+			return False
+		return True
+	
+	async def callback(self, interaction: discord.Interaction):
 		await interaction.response.send_modal(SaveEmbed())
-	@discord.ui.button(label='Clear',style=discord.ButtonStyle.danger)
-	async def clear_embed(self, interaction: discord.Interaction, button: discord.ui.Button):
-		if interaction.user.id != self.user_embed.id:
-			await interaction.response.send_message("You're not allowed to do that",ephemeral=True)
-			return
-		await interaction.response.edit_message(embed=discord.Embed(description='Empty embed'),view=self)
+
+class EmbedMakerClearButton(ui.DynamicItem[ui.Button],template=r'ce:cbtn:mid:(?P<msg_id>[0-9]+):uid:(?P<user_id>[0-9]+)'):
+	def __init__(self, msg_id: int, user_id: int):
+		super().__init__(ui.Button(label='Clear',style=discord.ButtonStyle.danger,custom_id=f'ce:cbtn:mid:{msg_id}:uid:{user_id}'))
+		self.msg_id = msg_id
+		self.user_id = user_id
+
+	@classmethod
+	async def from_custom_id(cls, interaction: discord.Interaction, item: ui.Button, match: re.Match[str], /):
+		msg_id = int(match['msg_id'])
+		user_id = int(match['user_id'])
+		return cls(msg_id,user_id)
+
+	async def interaction_check(self, interaction: discord.Interaction):
+		if interaction.user.id != self.user_id:
+			await interaction.response.send_message('Only whoever ran this command can interact with it',ephemeral=True)
+			return False
+		return True
+
+	async def callback(self, interaction: discord.Interaction):
+		await interaction.response.edit_message(embed=discord.Embed(description='Empty embed'))
+
+class EmbedMaker(ui.View):
+	def __init__(self, msg_id: int, user_id: int):
+		super().__init__(timeout=None)
+		self.user_id = user_id
+		self.add_item(EmbedMakerDropdown(msg_id,user_id))
+		self.add_item(EmbedMakerSaveButton(msg_id,user_id))
+		self.add_item(EmbedMakerClearButton(msg_id,user_id))
+	
+	async def interaction_check(self, interaction: discord.Interaction):
+		print(interaction.user.id,self.user_id)
+		if interaction.user.id != self.user_id:
+			await interaction.response.send_message('Only whoever ran this command can interact with it')
+			return False
+		return True
+
 class EmbedFields:
-	class AddField(discord.ui.Modal,title='Add a field!'):
-		name_ = discord.ui.TextInput(
+	class AddField(ui.Modal,title='Add a field!'):
+		name_ = ui.TextInput(
 			label = 'Name',style=discord.TextStyle.short,
 			required=False,max_length=256,placeholder='The name/title of the field. Up to 256 characters'
 		)
-		value_ = discord.ui.TextInput(
+		value_ = ui.TextInput(
 			label = 'Value',style=discord.TextStyle.long,
 			required=False,max_length=1024,placeholder='The field text value. Up to 1024 characters'
 		)
-		inline_ = discord.ui.TextInput(
+		inline_ = ui.TextInput(
 			label='Inline',style=discord.TextStyle.short,
 			required=False,placeholder='Type whatever to disable'
 		)
@@ -149,8 +206,8 @@ class EmbedFields:
 				await interaction.response.send_message("Discord limits embeds not to be larger than 6000 characters in total",ephemeral=True)
 				return
 			await interaction.response.edit_message(embed=embed)
-	class RemoveField(discord.ui.Modal,title='Removes a field'):
-		index_ = discord.ui.TextInput(
+	class RemoveField(ui.Modal,title='Removes a field'):
+		index_ = ui.TextInput(
 			label = 'Index', style=discord.TextStyle.short,
 			required=True,placeholder='The index number of the field to remove (starts at 1)'
 		)
@@ -162,22 +219,22 @@ class EmbedFields:
 				await interaction.response.send_message("Something wrong happened",ephemeral=True)
 			except ValueError:
 				await interaction.response.send_message("Must be a valid number",ephemeral=True)
-	class EditField(discord.ui.Modal,title='Edits a specific field'):
-		index_ = discord.ui.TextInput(
+	class EditField(ui.Modal,title='Edits a specific field'):
+		index_ = ui.TextInput(
 			label = 'Index',style = discord.TextStyle.short,
 			required=True,placeholder='The index number of the field to edit (starts at 1)'
 		)
-		name_ = discord.ui.TextInput(
+		name_ = ui.TextInput(
 			label = 'Name',style=discord.TextStyle.short,
 			required=False,placeholder='The name/title of the field. Up to 256 characters',
 			max_length=256
 		)
-		value_ = discord.ui.TextInput(
+		value_ = ui.TextInput(
 			label = 'Value',style = discord.TextStyle.long,
 			required=False,placeholder='The field text value. Up to 1024 characters',
 			max_length=1024
 		)
-		inline_ = discord.ui.TextInput(
+		inline_ = ui.TextInput(
 			label = 'Inline',style=discord.TextStyle.short,
 			required=False,placeholder='Type whatever to disable'
 		)
@@ -190,16 +247,16 @@ class EmbedFields:
 														inline=self.inline_.value==''))
 			except IndexError: await interaction.response.send_message("Something wrong happened :(",ephemeral=True)
 		
-class EmbedAuthor(discord.ui.Modal,title='Edit the author!'):
-	name_ = discord.ui.TextInput(
+class EmbedAuthor(ui.Modal,title='Edit the author!'):
+	name_ = ui.TextInput(
 		label = 'Name',style=discord.TextStyle.short,
 		required=False,max_length=256,placeholder='The name of the author. Up to 256 characters'
 	)
-	url_ = discord.ui.TextInput(
+	url_ = ui.TextInput(
 		label = 'URL',style=discord.TextStyle.short,
 		required = False,placeholder='Must be HTTP(S) format'
 	)
-	icon_url_ = discord.ui.TextInput(
+	icon_url_ = ui.TextInput(
 		label = 'Icon URL', style= discord.TextStyle.short,
 		required=False,placeholder='Must be HTTP(S) format'
 	)
@@ -224,16 +281,16 @@ class EmbedAuthor(discord.ui.Modal,title='Edit the author!'):
 			await interaction.response.send_message("Discord limits embeds not to be larger than 6000 characters in total",ephemeral=True)
 			return
 		await interaction.response.edit_message(embed=embed)
-class EmbedFooter(discord.ui.Modal,title='Edit the footer!'):
-	text_ = discord.ui.TextInput(
+class EmbedFooter(ui.Modal,title='Edit the footer!'):
+	text_ = ui.TextInput(
 		label = 'Text',style=discord.TextStyle.short,
 		required=False,placeholder="Footer's text. Up to 2048 characters",max_length=2048
 	)
-	icon_url_ = discord.ui.TextInput(
+	icon_url_ = ui.TextInput(
 		label = 'Icon URL',style=discord.TextStyle.short,
 		required=False,placeholder='Must be HTTP(S) format (Text label is required for this)'
 	)
-	timestamp_ = discord.ui.TextInput(
+	timestamp_ = ui.TextInput(
 		label = 'Timestamp',style=discord.TextStyle.short,
 		required=False,placeholder=f'Must be in timestamp format (E.g. {int(time.time())})'
 	)
@@ -258,11 +315,11 @@ class EmbedFooter(discord.ui.Modal,title='Edit the footer!'):
 		try: embed.timestamp = datetime.fromtimestamp(int(self.timestamp_.value))
 		except (ValueError,OSError): embed.timestamp = None
 		await interaction.response.edit_message(embed=embed)
-class EmbedURL(discord.ui.Modal,title='Edit the images!'):
-	url_ = discord.ui.TextInput(
+class EmbedURL(ui.Modal,title='Edit the images!'):
+	url_ = ui.TextInput(
 		label = 'Image URL',style=discord.TextStyle.short,
 		required = False,placeholder = 'Must be HTTP(S) format')
-	thumbnail_ = discord.ui.TextInput(
+	thumbnail_ = ui.TextInput(
 		label = 'Thumbnail URL',style=discord.TextStyle.short,
 		required = False,placeholder = 'Must be HTTP(S) format')
 	def __init__(self, place_holders: dict[str,Any]):
@@ -284,17 +341,17 @@ class EmbedURL(discord.ui.Modal,title='Edit the images!'):
 		else:
 			embed.set_thumbnail(url=None)
 		await interaction.response.edit_message(embed=embed)
-class EmbedPrompt(discord.ui.Modal,title='Edit the embed!'):
-	title_ = discord.ui.TextInput(
+class EmbedPrompt(ui.Modal,title='Edit the embed!'):
+	title_ = ui.TextInput(
 		label = 'Title',style=discord.TextStyle.short,max_length=256,
 		required = False,placeholder = 'Your title here')
-	description_ = discord.ui.TextInput(
+	description_ = ui.TextInput(
 		label = 'Description',style=discord.TextStyle.long,
 		required = False,placeholder = 'Your description here. Up to 4000 characters',max_length=4000)
-	url_ = discord.ui.TextInput(
+	url_ = ui.TextInput(
 		label = 'Title URL',style=discord.TextStyle.short,
 		required = False,placeholder = 'Must be HTTP(S) format')
-	color_ = discord.ui.TextInput(
+	color_ = ui.TextInput(
 		label= 'Color',style=discord.TextStyle.long,
 		required=False,placeholder='Must be Hex (#FFFFFF) or RGB (255,255,255). Some common colors such as "red" or "white" are fine'
 	)
@@ -328,8 +385,8 @@ class EmbedPrompt(discord.ui.Modal,title='Edit the embed!'):
 			await interaction.response.send_message("Discord limits embeds not to be larger than 6000 characters in total",ephemeral=True)
 			return
 		await interaction.response.edit_message(embed=embed)
-class SaveEmbed(discord.ui.Modal,title='Saves the embed!'):
-	tag = discord.ui.TextInput(
+class SaveEmbed(ui.Modal,title='Saves the embed!'):
+	tag = ui.TextInput(
 		label = 'Tag',style=discord.TextStyle.short,
 		required=True,max_length=20,placeholder='The UNIQUE tag name of your embed'
 	)
@@ -361,7 +418,13 @@ class CECog(commands.GroupCog,name='embed'):
 	async def create_embed(self, interaction: discord.Interaction):
 		if isinstance(interaction.user,discord.Member) and not interaction.permissions.manage_messages:
 			raise app_commands.MissingPermissions(['manage_messages'])
-		await interaction.response.send_message(embed=default_embed,view=EmbedMaker(interaction.user))
+		ephemeral = not isinstance(interaction.user,discord.User) and not interaction.permissions.embed_links
+		await interaction.response.defer(ephemeral=ephemeral) #this is to get the message id
+		await interaction.followup.send(embed=default_embed,
+				view=EmbedMaker(
+						user_id=interaction.user.id,
+						msg_id=(await interaction.original_response()).id)
+					)
 	
 	@app_commands.autocomplete(tag=embed_autocomplete)
 	@app_commands.command(name='remove')

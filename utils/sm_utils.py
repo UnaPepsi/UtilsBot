@@ -65,6 +65,7 @@ def parse_duration(duration_str: str):
 			minutes=minutes,
 			seconds=seconds
 		)
+		if duration.total_seconds() == 0: raise ValueError("Invalid duration format")
 		return duration
 	else:
 		raise ValueError("Invalid duration format")
