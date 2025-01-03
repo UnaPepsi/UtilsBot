@@ -241,7 +241,7 @@ class RandomCog(commands.Cog):
 		try:
 			fbytes = await get_ss(link,width,height)
 		except BadURL:
-			await interaction.followup.send('Must be a valid link. Valid link example: `http(s)://example.com`')
+			await interaction.followup.send('Must be a valid link. Example links:\n`https://example.com`\n`http://example.com`')
 		except BadResponse:
 			await interaction.followup.send('An error happened :(')
 		else:

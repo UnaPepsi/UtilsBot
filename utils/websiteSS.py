@@ -28,6 +28,8 @@ async def get_ss(link: str, width: int=1920, height: int=1080) -> io.BytesIO:
 			browser = await playwright.chromium.launch()
 			page = await browser.new_page()
 			await page.goto(link)
+			if re.match(fr'(?i)https?:\/\/(localhost|0\.0\.0\.0|{ip}|127.0.0.1|\[::1\])',page.url.strip()):
+				raise BadURL()
 			await page.set_viewport_size({"width": width, "height": height})
 			# await page.evaluate('document.body.style.zoom = "1000%"')
 			await page.evaluate('''(ip) => {
