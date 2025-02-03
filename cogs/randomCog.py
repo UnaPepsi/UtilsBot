@@ -5,8 +5,8 @@ from discord.ext import commands
 from utils.bypassUrl import bypass
 from utils.websiteSS import get_ss, BadURL, BadResponse
 from utils.dearrow import dearrow, VideoNotFound
-from utils import animalapi, translate
-from typing import Literal, Optional, List, TYPE_CHECKING
+from utils import animalapi, translate, reverseImage
+from typing import Literal, Optional, List, TYPE_CHECKING, Union
 import os
 import logging
 from time import perf_counter
@@ -20,6 +20,50 @@ logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
 	from bot import UtilsBot
+
+class ChunkedPaginator(ui.View):
+	index = 0
+	def __init__(self, itr: List[reverseImage.TinEyeResult], timeout: Optional[Union[int,float]] = None):
+		self.chunked = list(discord.utils.as_chunks(itr,8))
+		logger.debug(self.chunked)
+		super().__init__(timeout=timeout)
+		self.edit_children()
+
+	def edit_children(self):
+		self.go_first.disabled = self.index == 0
+		self.go_back.disabled = self.index == 0
+		self.go_foward.disabled = self.index == len(self.chunked)-1
+		self.go_last.disabled = self.index == len(self.chunked)-1
+
+	async def edit_embed(self, interaction: discord.Interaction):
+		embed = discord.Embed(
+			title = f'Page {self.index+1}',
+			description = '\n'.join(f'- [URL]({result.url}) - [Backlink]({result.backlink}) - {result.date}' for result in self.chunked[self.index]),
+			color = discord.Color.green()
+		)
+		embed.set_author(name='Using TinEye, click to see results on your browser',icon_url='https://i.imgur.com/O1LYRWf.png',url='https://tineye.com/search/'+self.chunked[0][0].query_hash)
+		self.edit_children()
+		await interaction.response.edit_message(embed=embed,view=self)
+
+	@ui.button(label='<<',style=discord.ButtonStyle.primary)
+	async def go_first(self, interaction: discord.Interaction, button: ui.Button):
+		self.index = 0
+		await self.edit_embed(interaction)
+
+	@ui.button(label='<',style=discord.ButtonStyle.secondary)
+	async def go_back(self, interaction: discord.Interaction, button: ui.Button):
+		self.index -= 1
+		await self.edit_embed(interaction)
+
+	@ui.button(label='>',style=discord.ButtonStyle.secondary)
+	async def go_foward(self, interaction: discord.Interaction, button: ui.Button):
+		self.index += 1
+		await self.edit_embed(interaction)
+
+	@ui.button(label='>>',style=discord.ButtonStyle.primary)
+	async def go_last(self, interaction: discord.Interaction, button: ui.Button):
+		self.index = len(self.chunked)-1
+		await self.edit_embed(interaction)
 
 class RandomCog(commands.Cog):
 	def __init__(self, bot: 'UtilsBot'):
@@ -37,6 +81,10 @@ class RandomCog(commands.Cog):
 			name = 'Shazam!',
 			callback = self.shazam_song
 		)
+		self.reverse_image_ctx_menu = app_commands.ContextMenu(
+			name = 'Reverse Image Search',
+			callback = self.reverse_image_search
+		)
 		@self.clickbait_ctx_menu.error
 		async def clickbait_ctx_menu_error(interaction, error):
 			await self.cog_app_command_error(interaction,error)
@@ -46,15 +94,50 @@ class RandomCog(commands.Cog):
 		@self.shazam_ctx_menu.error
 		async def shazam_ctx_menu_error(interaction, error):
 			await self.cog_app_command_error(interaction,error)
+		@self.reverse_image_ctx_menu.error
+		async def reverse_image_ctx_menu_error(interaction, error):
+			await self.cog_app_command_error(interaction,error)
 
 		self.bot.tree.add_command(self.clickbait_ctx_menu)
 		self.bot.tree.add_command(self.translate_ctx_menu)
 		self.bot.tree.add_command(self.shazam_ctx_menu)
+		self.bot.tree.add_command(self.reverse_image_ctx_menu)
 	
 	async def cog_unload(self):
 		self.bot.tree.remove_command(self.clickbait_ctx_menu.name,type=self.clickbait_ctx_menu.type)
 		self.bot.tree.remove_command(self.translate_ctx_menu.name,type=self.translate_ctx_menu.type)
-		self.bot.tree.remove_command(self.shazam_ctx_menu.name,type=self.translate_ctx_menu.type)
+		self.bot.tree.remove_command(self.shazam_ctx_menu.name,type=self.shazam_ctx_menu.type)
+		self.bot.tree.remove_command(self.reverse_image_ctx_menu.name,type=self.reverse_image_ctx_menu.type)
+
+	@app_commands.allowed_installs(guilds=True,users=True)
+	@app_commands.allowed_contexts(guilds=True,dms=True,private_channels=True)
+	@app_commands.checks.cooldown(rate=1,per=10,key=lambda i: i.user.id)
+	async def reverse_image_search(self, interaction: discord.Interaction, msg: discord.Message):
+		attachments = msg.attachments
+		if not attachments:
+			return await interaction.response.send_message('Message must contain at least 1 image',ephemeral=True)
+		if len(attachments) > 10:
+			logger.warning('It seems like Discord now supports more than 10 attachments in a single message')
+
+		ephemeral = not isinstance(interaction.user,discord.User) and not interaction.permissions.embed_links
+		await interaction.response.defer(ephemeral=ephemeral)
+
+		results = []
+		for attachment in attachments:
+			if attachment.content_type and attachment.content_type.startswith('image/'):
+				try:
+					results += await reverseImage.tin_eye(attachment.proxy_url)
+				except reverseImage.NotFound: ...
+		if not results:
+			return await interaction.followup.send('Nothing found :(')
+		view = ChunkedPaginator(results,300)
+		embed = discord.Embed(
+			title = f'Page 1',
+			description = '\n'.join(f'- [URL]({result.url}) - [Backlink]({result.backlink}) - {result.date}' for result in results[:8]),
+			color = discord.Color.green()
+		)
+		embed.set_author(name='Using TinEye, click to see results on your browser',icon_url='https://i.imgur.com/O1LYRWf.png',url='https://tineye.com/search/'+results[0].query_hash)
+		await interaction.followup.send(view=view,embed=embed)
 
 	@app_commands.allowed_installs(guilds=True,users=True)	
 	@app_commands.allowed_contexts(guilds=True,dms=True,private_channels=True)
