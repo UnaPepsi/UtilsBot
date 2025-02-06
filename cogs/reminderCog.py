@@ -219,6 +219,8 @@ class SetReminderModal(ui.Modal,title='Set a reminder for this message'):
 			embed.description = str(e)
 			embed.colour = discord.Colour.red()
 			view = discord.utils.MISSING
+		except ValueError:
+			return await interaction.followup.send('Invalid duration format. Some valid examples: 1day, 3h2m, 1week5d')
 		await interaction.followup.send(embed=embed,view=view)
 		if isinstance(view,ui.View):
 			view.message = await interaction.original_response() #type: ignore
@@ -340,6 +342,8 @@ class RemindCog(commands.GroupCog,name='reminder'):
 			embed.description = str(e)
 			embed.colour = discord.Colour.red()
 			view = discord.utils.MISSING
+		except ValueError:
+			return await interaction.followup.send('Invalid duration format. Some valid examples: 1day, 3h2m, 1week5d')
 		await interaction.followup.send(embed=embed,view=view)
 		if isinstance(view,ui.View):
 			view.message = await interaction.original_response() #type: ignore
