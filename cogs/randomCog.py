@@ -119,8 +119,7 @@ class RandomCog(commands.Cog):
 		if len(attachments) > 10:
 			logger.warning('It seems like Discord now supports more than 10 attachments in a single message')
 
-		ephemeral = not isinstance(interaction.user,discord.User) and not interaction.permissions.embed_links
-		await interaction.response.defer(ephemeral=ephemeral)
+		await interaction.response.defer(ephemeral=True)
 
 		results = []
 		for attachment in attachments:
@@ -149,7 +148,7 @@ class RandomCog(commands.Cog):
 		if len(msg.attachments) > 10:
 			logger.warning('It seems like Discord now supports more than 10 attachments in a single message')
 
-		await interaction.response.defer()
+		await interaction.response.defer(ephemeral=True)
 
 		@caching
 		async def get_shazam_song(o: bytes) -> Optional[TrackInfo]:
@@ -192,10 +191,9 @@ class RandomCog(commands.Cog):
 			await interaction.response.send_message(
 			'Message must contain a valid YouTube video link. Example links:\n'
 			'`https://www.youtube.com/watch?v=6NQHtVrP3gE\n'+
-			'https://youtu.be/6NQHtVrP3gE`')
+			'https://youtu.be/6NQHtVrP3gE`',ephemeral=True)
 			return
-		ephemeral = not isinstance(interaction.user,discord.User) and not interaction.permissions.embed_links
-		await interaction.response.defer(ephemeral=ephemeral)
+		await interaction.response.defer(ephemeral=True)
 		try:
 			d = await dearrow(vid_re.group('video_id'))
 		except VideoNotFound as e:
@@ -225,10 +223,9 @@ class RandomCog(commands.Cog):
 		elif msg.reference and isinstance(msg.reference.resolved,discord.Message) and msg.reference.resolved.content: # msg.reference.resolved is always None. Probably something to do with my intents
 			content = msg.reference.resolved.content
 		if not content or not content.split():
-			await interaction.response.send_message("Couldn't translate that message. Is there content there?")
+			await interaction.response.send_message("Couldn't translate that message. Is there content there?",ephemeral=True)
 			return
-		ephemeral = not isinstance(interaction.user,discord.User) and not interaction.permissions.embed_links
-		await interaction.response.defer(ephemeral=ephemeral)
+		await interaction.response.defer(ephemeral=True)
 		try:
 			translation = await translate.translate_google(target=interaction.locale.value,q=content)
 		except translate.TranslationFailed:

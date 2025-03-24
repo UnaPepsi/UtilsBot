@@ -188,8 +188,7 @@ class SetReminderModal(ui.Modal,title='Set a reminder for this message'):
 
 	async def on_submit(self, interaction: discord.Interaction):
 		if interaction.channel is None: return
-		ephemeral = not isinstance(interaction.user,discord.User) and not interaction.permissions.embed_links
-		await interaction.response.defer(thinking=True,ephemeral=ephemeral)
+		await interaction.response.defer(thinking=True,ephemeral=True)
 		embed = discord.Embed()
 		try:
 			timestamp = int(sm_utils.parse_duration(self._when.value).total_seconds() + time())

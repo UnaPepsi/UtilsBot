@@ -119,7 +119,7 @@ class EmbedMakerDropdown(ui.DynamicItem[ui.Select], template=r'ce:dp:mid:(?P<msg
 		if interaction.message is None:
 			await interaction.response.send_message('Something went wrong :(',ephemeral=True)
 			return
-		if interaction.guild:
+		if interaction.is_guild_integration():
 			await interaction.message.edit(view=self.view)
 		await interaction.response.send_modal(options[self.item.values[0]])
 
