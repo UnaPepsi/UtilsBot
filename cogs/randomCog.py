@@ -5,7 +5,7 @@ from discord.ext import commands
 from utils.bypassUrl import bypass
 from utils.websiteSS import get_ss, BadURL, BadResponse
 from utils.dearrow import dearrow, VideoNotFound
-from utils import animalapi, translate, reverseImage
+from utils import animalapi, paginator, paperjavadocs, translate, reverseImage
 from typing import Literal, Optional, List, TYPE_CHECKING, Union
 import os
 import logging
@@ -21,19 +21,14 @@ logger = logging.getLogger(__name__)
 if TYPE_CHECKING:
 	from bot import UtilsBot
 
-class ChunkedPaginator(ui.View):
-	index = 0
-	def __init__(self, itr: List[reverseImage.TinEyeResult], timeout: Optional[Union[int,float]] = None):
-		self.chunked = list(discord.utils.as_chunks(itr,8))
-		logger.debug(self.chunked)
-		super().__init__(timeout=timeout)
-		self.edit_children()
+async def paper_docs_autocomplete(interaction: discord.Interaction, current: str) -> List[app_commands.Choice[str]]:
+	results = list(filter(lambda x: current.lower() in x.lower().replace('/','.'),paperjavadocs.items()))[:25]
+	return [app_commands.Choice(name=res[:100].replace('/','.'),value=res[:100].replace('/','.')) for res in results]
 
-	def edit_children(self):
-		self.go_first.disabled = self.index == 0
-		self.go_back.disabled = self.index == 0
-		self.go_foward.disabled = self.index == len(self.chunked)-1
-		self.go_last.disabled = self.index == len(self.chunked)-1
+class TinEyePaginator(paginator.ChunkedPaginator):
+	def __init__(self, itr: List[reverseImage.TinEyeResult], timeout: Optional[Union[int,float]] = None):
+		super().__init__(timeout=timeout,itr=itr)
+		logger.debug(self.chunked)
 
 	async def edit_embed(self, interaction: discord.Interaction):
 		embed = discord.Embed(
@@ -44,27 +39,15 @@ class ChunkedPaginator(ui.View):
 		embed.set_author(name='Using TinEye, click to see results on your browser',icon_url='https://i.imgur.com/O1LYRWf.png',url='https://tineye.com/search/'+self.chunked[0][0].query_hash)
 		self.edit_children()
 		await interaction.response.edit_message(embed=embed,view=self)
-
-	@ui.button(label='<<',style=discord.ButtonStyle.primary)
-	async def go_first(self, interaction: discord.Interaction, button: ui.Button):
-		self.index = 0
-		await self.edit_embed(interaction)
-
-	@ui.button(label='<',style=discord.ButtonStyle.secondary)
-	async def go_back(self, interaction: discord.Interaction, button: ui.Button):
-		self.index -= 1
-		await self.edit_embed(interaction)
-
-	@ui.button(label='>',style=discord.ButtonStyle.secondary)
-	async def go_foward(self, interaction: discord.Interaction, button: ui.Button):
-		self.index += 1
-		await self.edit_embed(interaction)
-
-	@ui.button(label='>>',style=discord.ButtonStyle.primary)
-	async def go_last(self, interaction: discord.Interaction, button: ui.Button):
-		self.index = len(self.chunked)-1
-		await self.edit_embed(interaction)
-
+class PaperJavaDocsPaginator(paginator.ChunkedPaginator):
+	async def edit_embed(self, interaction: discord.Interaction):
+		embed = discord.Embed(
+			title = f'Page {self.index+1}',
+			description='\n'.join(f'[`{re.sub(r'\b[a-z]\w*\.', '',result.replace('/','.'))[-65:]}`]({f'https://jd.papermc.io/paper/{os.environ['VERSION']}/'+result.replace('#','.html#')})' for result in self.chunked[self.index]),
+			color=discord.Color.green()
+		)
+		self.edit_children()
+		await interaction.response.edit_message(embed=embed,view=self)
 class RandomCog(commands.Cog):
 	def __init__(self, bot: 'UtilsBot'):
 		self.bot = bot
@@ -129,7 +112,7 @@ class RandomCog(commands.Cog):
 				except reverseImage.NotFound: ...
 		if not results:
 			return await interaction.followup.send('Nothing found :(')
-		view = ChunkedPaginator(results,300)
+		view = TinEyePaginator(results,300)
 		embed = discord.Embed(
 			title = f'Page 1',
 			description = '\n'.join(f'- [URL]({result.url}) - [Backlink]({result.backlink}) - {result.date}' for result in results[:8]),
@@ -169,7 +152,7 @@ class RandomCog(commands.Cog):
 			description = '',
 			color=discord.Color.blue()
 		)
-		embed.set_author(icon_url='https://fun.guimx.me/r/PFTT4RB5Bx.png?compress=false',name='Songs found')
+		embed.set_author(icon_url='https://i.imgur.com/8Y1RuWQ.png',name='Songs found')
 		for result in results:
 			info = ''
 			#these links are sometimes wrong or just broken
@@ -210,7 +193,7 @@ class RandomCog(commands.Cog):
 			file = discord.File(BytesIO(d.thumbnail),filename='image.png')
 		else:
 			embed.set_footer(text="No thumbnail found or hasn't been processed yet")
-		embed.set_author(name='Attempt on removing clickbait. Using DeArrow API',url='https://dearrow.ajay.app/',icon_url='http://fun.guimx.me/r/9CPk7o.png?compress=false')
+		embed.set_author(name='Attempt on removing clickbait. Using DeArrow API',url='https://dearrow.ajay.app/',icon_url='https://i.imgur.com/srnqeKv.png')
 		await interaction.followup.send(embed=embed,file=file)
 
 	@app_commands.allowed_installs(guilds=True,users=True)
@@ -235,7 +218,7 @@ class RandomCog(commands.Cog):
 			description=f'```{translation}```',
 			color=discord.Color.green()
 		)
-		embed.set_thumbnail(url='https://fun.guimx.me/r/3797961.png?compress=false')
+		embed.set_thumbnail(url='https://i.imgur.com/yzxhY8B.png')
 		embed.set_footer(text='Translated to your Discord language')
 		await interaction.followup.send(embed=embed)
 
@@ -382,12 +365,28 @@ class RandomCog(commands.Cog):
 						color=0xff0000) #red
 		e.add_field(name=':bar_chart: Server Count',value=f'{len(self.bot.guilds)}',inline=False)
 		e.add_field(name=':man_raising_hand: Approx. Individual User Count',value=f'{(await self.bot.application_info()).approximate_user_install_count or 0}',inline=False)
-		e.add_field(name=':scroll: Author',value='[.guimx](https://guimx.me)',inline=False)
+		e.add_field(name=':scroll: Author',value='[.guimx](https://guimx.codes)',inline=False)
 		e.add_field(name=':globe_with_meridians: Add App URL',value='[URL](https://discord.com/oauth2/authorize?client_id=778785822828265514)',inline=False)
 		e.add_field(name=f'{self.bot.custom_emojis.github} Source Code',value='[GitHub](https://github.com/UnaPepsi/UtilsBot)',inline=False)
-		e.add_field(name=':man_police_officer: ToS',value='https://guimx.me/rbot/tos',inline=False)
-		e.add_field(name=':detective: Privacy Policy',value='https://guimx.me/rbot/privacypolicy',inline=False)
+		e.add_field(name=':man_police_officer: ToS',value='https://guimx.codes/rbot/tos',inline=False)
+		e.add_field(name=':detective: Privacy Policy',value='https://guimx.codes/rbot/privacypolicy',inline=False)
 		await interaction.response.send_message(embed=e)
+
+	@app_commands.allowed_installs(guilds=True,users=True)
+	@app_commands.allowed_contexts(guilds=True,dms=True,private_channels=True)
+	@app_commands.command(name='rtfm')
+	@app_commands.autocomplete(key=paper_docs_autocomplete)
+	async def paper_docs(self, interaction: discord.Interaction, key: str):
+		"""Gives a documentation link for PaperMC Javadocs"""
+		results = list(filter(lambda x: key.lower() in x.lower().replace('/','.'),paperjavadocs.items()))
+		if len(results) == 0:
+			return await interaction.response.send_message('Nothing found',ephemeral=True)
+		embed = discord.Embed(
+			title = 'Paper Docs',
+			color=discord.Color.green(),
+			description='\n'.join(f'[`{re.sub(r'\b[a-z]\w*\.', '',result.replace('/','.'))[-65:]}`]({f'https://jd.papermc.io/paper/{os.environ['VERSION']}/'+result.replace('#','.html#')})' for result in results[:8])
+		)
+		await interaction.response.send_message(embed=embed,view=PaperJavaDocsPaginator(results,300))
 
 	@commands.command(name='mrl')
 	async def reload_module(self, ctx: commands.Context):
@@ -443,9 +442,14 @@ class RandomCog(commands.Cog):
 		raise error
 		
 	@commands.command(name='source')
-	@commands.is_owner()
 	async def source_code(self, ctx:commands.Context):
 		await ctx.reply('My source code is [here!](<https://github.com/UnaPepsi/UtilsBot>) :>',mention_author=False)
+	
+	@commands.command(name='paperreload')
+	@commands.is_owner()
+	async def papermc_reload(self, ctx:commands.Context):
+		await paperjavadocs.reload_paper_docs()
+		await ctx.send('done')
 		
 		
 async def setup(bot: 'UtilsBot'):
