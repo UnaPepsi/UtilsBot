@@ -43,9 +43,10 @@ class PaperJavaDocsPaginator(paginator.ChunkedPaginator):
 	async def edit_embed(self, interaction: discord.Interaction):
 		embed = discord.Embed(
 			title = f'Page {self.index+1}',
-			description='\n'.join(f'[`{re.sub(r'\b[a-z]\w*\.', '',result.replace('/','.'))[-65:]}`]({f'https://jd.papermc.io/paper/{os.environ['VERSION']}/'+result.replace('#','.html#')})' for result in self.chunked[self.index]),
+			description='\n'.join(f'[{paperjavadocs.format_string(result)}]({f'https://jd.papermc.io/paper/{os.environ['VERSION']}/'+result.replace('#','.html#')})' for result in self.chunked[self.index]),
 			color=discord.Color.green()
 		)
+		embed.set_footer(text='PaperMC Javadocs. Strikethrough means deprecated')
 		self.edit_children()
 		await interaction.response.edit_message(embed=embed,view=self)
 class RandomCog(commands.Cog):
@@ -120,6 +121,7 @@ class RandomCog(commands.Cog):
 		)
 		embed.set_author(name='Using TinEye, click to see results on your browser',icon_url='https://i.imgur.com/O1LYRWf.png',url='https://tineye.com/search/'+results[0].query_hash)
 		await interaction.followup.send(view=view,embed=embed)
+		view.message = await interaction.original_response()
 
 	@app_commands.allowed_installs(guilds=True,users=True)	
 	@app_commands.allowed_contexts(guilds=True,dms=True,private_channels=True)
@@ -382,11 +384,14 @@ class RandomCog(commands.Cog):
 		if len(results) == 0:
 			return await interaction.response.send_message('Nothing found',ephemeral=True)
 		embed = discord.Embed(
-			title = 'Paper Docs',
+			title = 'Page 1',
 			color=discord.Color.green(),
-			description='\n'.join(f'[`{re.sub(r'\b[a-z]\w*\.', '',result.replace('/','.'))[-65:]}`]({f'https://jd.papermc.io/paper/{os.environ['VERSION']}/'+result.replace('#','.html#')})' for result in results[:8])
+			description='\n'.join(f'[{paperjavadocs.format_string(result)}]({f'https://jd.papermc.io/paper/{os.environ['VERSION']}/'+result.replace('#','.html#')})' for result in results[:8])
 		)
-		await interaction.response.send_message(embed=embed,view=PaperJavaDocsPaginator(results,300))
+		embed.set_footer(text='PaperMC Javadocs. Strikethrough means deprecated')
+		view = PaperJavaDocsPaginator(results,300)
+		await interaction.response.send_message(embed=embed,view=view)
+		view.message = await interaction.original_response()
 
 	@commands.command(name='mrl')
 	async def reload_module(self, ctx: commands.Context):
@@ -448,7 +453,7 @@ class RandomCog(commands.Cog):
 	@commands.command(name='paperreload')
 	@commands.is_owner()
 	async def papermc_reload(self, ctx:commands.Context):
-		await paperjavadocs.reload_paper_docs()
+		await self.bot.loop.run_in_executor(None,paperjavadocs.reload_paper_docs)
 		await ctx.send('done')
 		
 		

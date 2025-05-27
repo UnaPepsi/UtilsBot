@@ -1,10 +1,11 @@
-from discord import ui, Interaction, Embed, ButtonStyle, utils
+from discord import ui, Interaction, InteractionMessage, ButtonStyle, utils
 from typing import List, TypeVar, Optional, Union, Generic
 
 T = TypeVar('T')
 
 class ChunkedPaginator(ui.View, Generic[T]):
 	index = 0
+	message: Optional[InteractionMessage] = None
 	def __init__(self, itr: List[T], timeout: Optional[Union[int,float]] = None):
 		self.chunked = list(utils.as_chunks(itr,8))
 		super().__init__(timeout=timeout)
@@ -38,3 +39,7 @@ class ChunkedPaginator(ui.View, Generic[T]):
 	async def go_last(self, interaction: Interaction, button: ui.Button):
 		self.index = len(self.chunked)-1
 		await self.edit_embed(interaction)
+	
+	async def on_timeout(self):
+		if self.message:
+			await self.message.edit(view=None)
