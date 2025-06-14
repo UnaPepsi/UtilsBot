@@ -6,6 +6,7 @@ from utils.bypassUrl import bypass
 from utils.websiteSS import get_ss, BadURL, BadResponse
 from utils.dearrow import dearrow, VideoNotFound
 from utils import animalapi, paginator, paperjavadocs, translate, reverseImage
+from utils.speechbubble import Background, generate_speech_bubble
 from typing import Literal, Optional, List, TYPE_CHECKING, Union
 import os
 import logging
@@ -20,6 +21,39 @@ logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
 	from bot import UtilsBot
+
+class BubbleSpeechBackGround(ui.Select):
+	def __init__(self, message: discord.Message, user_id: int, bot: 'UtilsBot'):
+		super().__init__(
+			placeholder='Change Image Background',
+			options=[
+				discord.SelectOption(label='Light',emoji=bot.custom_emojis.light,value='LIGHT'),
+				discord.SelectOption(label='Ash',emoji=bot.custom_emojis.ash,value='ASH'),
+				discord.SelectOption(label='Dark',emoji=bot.custom_emojis.dark,value='DARK'),
+				discord.SelectOption(label='Onyx',emoji=bot.custom_emojis.onyx,value='ONYX'),
+				discord.SelectOption(label='Legacy',emoji=bot.custom_emojis.legacy,value='LEGACY'),
+				discord.SelectOption(label='Old',emoji=bot.custom_emojis.old,value='OLD'),
+				discord.SelectOption(label='Mobile Dark',emoji=bot.custom_emojis.mobile_dark,value='MOBILE_DARK')
+			]
+		)
+		self.message = message
+		self.user_id = user_id
+		self.bot = bot
+	
+	async def interaction_check(self, interaction: discord.Interaction):
+		if interaction.user.id != self.user_id:
+			await interaction.response.send_message('Only whoever ran this command can interact with it',ephemeral=True)
+			return False
+		return True
+	
+	async def callback(self, interaction: discord.Interaction):
+		if not interaction.message:
+			return await interaction.response.send_message('An error occurred :(',ephemeral=True)
+		if not self.message.content:
+			return await interaction.response.send_message('Message must contain text',ephemeral=True)
+		await interaction.response.defer()
+		file = discord.File(await self.bot.loop.create_task(generate_speech_bubble(Background[self.values[0]],self.message)),'bubble-speech.gif')
+		await interaction.followup.edit_message(message_id=interaction.message.id,attachments=[file])
 
 async def paper_docs_autocomplete(interaction: discord.Interaction, current: str) -> List[app_commands.Choice[str]]:
 	results = list(filter(lambda x: current.lower() in x.lower().replace('/','.'),paperjavadocs.items()))[:25]
@@ -69,6 +103,10 @@ class RandomCog(commands.Cog):
 			name = 'Reverse Image Search',
 			callback = self.reverse_image_search
 		)
+		self.bubble_speech_ctx_menu = app_commands.ContextMenu(
+			name = 'Bubble Speech Message (Public)',
+			callback = self.bubble_speech
+		)
 		@self.clickbait_ctx_menu.error
 		async def clickbait_ctx_menu_error(interaction, error):
 			await self.cog_app_command_error(interaction,error)
@@ -81,17 +119,34 @@ class RandomCog(commands.Cog):
 		@self.reverse_image_ctx_menu.error
 		async def reverse_image_ctx_menu_error(interaction, error):
 			await self.cog_app_command_error(interaction,error)
+		@self.bubble_speech_ctx_menu.error
+		async def bubble_speech_ctx_menu_error(interaction, error):
+			await self.cog_app_command_error(interaction,error)
 
 		self.bot.tree.add_command(self.clickbait_ctx_menu)
 		self.bot.tree.add_command(self.translate_ctx_menu)
 		self.bot.tree.add_command(self.shazam_ctx_menu)
 		self.bot.tree.add_command(self.reverse_image_ctx_menu)
+		self.bot.tree.add_command(self.bubble_speech_ctx_menu)
 	
 	async def cog_unload(self):
 		self.bot.tree.remove_command(self.clickbait_ctx_menu.name,type=self.clickbait_ctx_menu.type)
 		self.bot.tree.remove_command(self.translate_ctx_menu.name,type=self.translate_ctx_menu.type)
 		self.bot.tree.remove_command(self.shazam_ctx_menu.name,type=self.shazam_ctx_menu.type)
 		self.bot.tree.remove_command(self.reverse_image_ctx_menu.name,type=self.reverse_image_ctx_menu.type)
+		self.bot.tree.remove_command(self.bubble_speech_ctx_menu.name,type=self.bubble_speech_ctx_menu.type)
+
+	@app_commands.allowed_installs(guilds=True,users=True)
+	@app_commands.allowed_contexts(guilds=True,dms=True,private_channels=True)
+	@app_commands.checks.cooldown(rate=1,per=10,key=lambda i: i.user.id)
+	async def bubble_speech(self, interaction: discord.Interaction, msg: discord.Message):
+		if not msg.content:
+			return await interaction.response.send_message('Message must contain text',ephemeral=True)
+		await interaction.response.defer()
+		file = discord.File(await self.bot.loop.create_task(generate_speech_bubble(Background.DARK,msg)),'bubble-speech.gif')
+		view = ui.View(timeout=600)
+		view.add_item(BubbleSpeechBackGround(msg,interaction.user.id,self.bot))
+		await interaction.followup.send(file=file,view=view)
 
 	@app_commands.allowed_installs(guilds=True,users=True)
 	@app_commands.allowed_contexts(guilds=True,dms=True,private_channels=True)
@@ -379,7 +434,11 @@ class RandomCog(commands.Cog):
 	@app_commands.command(name='rtfm')
 	@app_commands.autocomplete(key=paper_docs_autocomplete)
 	async def paper_docs(self, interaction: discord.Interaction, key: str):
-		"""Gives a documentation link for PaperMC Javadocs"""
+		"""Gives a documentation link for PaperMC Javadocs
+		
+		Args:
+			key (str): The item(s) to search for
+		"""
 		results = list(filter(lambda x: key.lower() in x.lower().replace('/','.'),paperjavadocs.items()))
 		if len(results) == 0:
 			return await interaction.response.send_message('Nothing found',ephemeral=True)

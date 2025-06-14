@@ -20,7 +20,7 @@ def reload_paper_docs():
 	for dt in dts:
 		a = dt.find('a')
 		if a and a.has_attr('href'):
-			_items.append(unquote(a.get('href').replace('.html','')))
+			_items.append(unquote(a.get('href').replace('.html','' if a.get('href').endswith('.html') else '.html')))
 	resp = requests.get(f'https://jd.papermc.io/paper/{environ['VERSION']}/deprecated-list.html')
 	if not resp.ok:
 		raise RuntimeError(f"Deprecated response was not ok {resp.reason}")
@@ -29,7 +29,7 @@ def reload_paper_docs():
 	for div in divs:
 		a = div.find('a')
 		if a and a.has_attr('href'):
-			_deprecated.add(unquote(a.get('href').replace('.html','')))
+			_deprecated.add(unquote(a.get('href').replace('.html','' if a.get('href').endswith('.html') else '.html')))
 
 def format_string(key: str):
 	a = '`'+re.sub(r'\b[a-z]\w*\.', '',key.replace('/','.'))[-65:]+'`'

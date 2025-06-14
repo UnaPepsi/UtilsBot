@@ -40,21 +40,12 @@ class UtilsBot(commands.Bot):
 		tasks = []
 		for item in listdir('cogs'):
 			if item.endswith('.py'):
-				tasks.append(asyncio.create_task(self.load_extensions(f'cogs.{item.strip(".py")}')))
+				tasks.append(asyncio.create_task(self.load_extension(f'cogs.{item.strip(".py")}')))
 		asyncio.gather(*tasks)
 		await self.load_extension('jishaku')
 		self.add_dynamic_items(GiveawayJoinDynamicButton,EmbedMakerSaveButton,EmbedMakerClearButton,EmbedMakerDropdown)
 		emojis = {e.name:e for e in await self.fetch_application_emojis()}
-		self.custom_emojis = MyEmojis(
-			youtube = emojis['youtube'],
-			spotify = emojis['spotify'],
-			apple_music = emojis['apple_music'],
-			shazam = emojis['shazam'],
-			github = emojis['github']
-		)
-	
-	async def load_extensions(self, ext: str) -> None:
-		await self.load_extension(ext)
+		self.custom_emojis = MyEmojis(**{k: emojis[k] for k in MyEmojis.__annotations__})
 
 	async def on_command_error(self, ctx: commands.Context, error: commands.CommandError) -> None:
 		if isinstance(error, (commands.CommandNotFound,commands.NotOwner)):
@@ -68,6 +59,13 @@ class MyEmojis:
 	apple_music: Emoji
 	shazam: Emoji
 	github: Emoji
+	light: Emoji
+	ash: Emoji
+	dark: Emoji
+	onyx: Emoji
+	legacy: Emoji
+	old: Emoji
+	mobile_dark: Emoji
 
 if __name__ == '__main__':
 	discord.utils.setup_logging(handler=console_handler)
