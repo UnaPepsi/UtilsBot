@@ -452,9 +452,11 @@ class RandomCog(commands.Cog):
 		await interaction.response.send_message(embed=embed,view=view)
 		view.message = await interaction.original_response()
 
-	@commands.command(name='mrl')
-	async def reload_module(self, ctx: commands.Context):
+	@commands.command(name='mrl-all')
+	@commands.is_owner()
+	async def reload_all_modules(self, ctx: commands.Context):
 		if not await self.bot.is_owner(ctx.author): #useless but just incase
+			logger.warning(f'{ctx.author.id} somehow got here')
 			return
 		logger.info('Attempting to reload everything')
 		await ctx.send('trying')
@@ -467,6 +469,16 @@ class RandomCog(commands.Cog):
 					if item == 'cogs':
 						await self.bot.reload_extension('cogs.'+file[:-3])
 		await ctx.send(f'done. took {perf_counter()-start}s')
+
+	@commands.command(name='mrl')
+	@commands.is_owner()
+	async def reload_module(self, ctx: commands.Context, key: str):
+		if not await self.bot.is_owner(ctx.author): #useless but just incase
+			logger.warning(f'{ctx.author.id} somehow got here')
+			return
+		logger.info(f'Attempting to reload {key}')
+		importlib.reload(importlib.import_module(key))
+		await ctx.send('done')
 
 	@commands.command(name='rl')
 	@commands.is_owner()
