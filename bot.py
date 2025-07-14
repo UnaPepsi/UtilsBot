@@ -1,5 +1,3 @@
-from dotenv import load_dotenv
-load_dotenv()
 import discord
 from discord import Intents, CustomActivity, BaseActivity, Emoji
 from discord.ext import commands
@@ -11,7 +9,6 @@ from cogs.giveawayCog import GiveawayJoinDynamicButton
 from cogs.customEmbedCog import EmbedMakerSaveButton, EmbedMakerClearButton, EmbedMakerDropdown
 import logging
 import logging.handlers
-
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 handler = logging.handlers.RotatingFileHandler(
@@ -70,9 +67,4 @@ class MyEmojis:
 if __name__ == '__main__':
 	discord.utils.setup_logging(handler=console_handler)
 	bot = UtilsBot(intents=Intents(dm_messages = True, guild_messages = True,guilds = True),activity=CustomActivity(name=environ['ACTIVITY']))
-	try:
-		asyncio.run(bot.start(environ['TOKEN']))
-	except KeyboardInterrupt:
-		asyncio.run(bot.close())
-		logger.info(f"Closing bot, bot closed: {bot.is_closed()}")
-		exit()
+	asyncio.run(bot.start(environ['TOKEN']))

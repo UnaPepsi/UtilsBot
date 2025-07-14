@@ -1,0 +1,15 @@
+services:
+  bot:
+    environment:
+      TOKEN: ${TOKEN}
+      TOPGG: ${TOPGG}
+      GOOGLE: ${GOOGLE}
+      PROXY: ${PROXY}
+      TENOR: ${TENOR}
+      IP: ${IP}
+      ACTIVITY: ${ACTIVITY}
+      OWNER_ID: ${OWNER_ID}
+      VERSION: ${VERSION}
+    volumes:
+      - /home/something/users.db:/app/users.db
+    build: .
