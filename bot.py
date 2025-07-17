@@ -63,6 +63,8 @@ class MyEmojis:
 	legacy: Emoji
 	old: Emoji
 	mobile_dark: Emoji
+	rectangle: Emoji
+	transparent: Emoji
 
 if __name__ == '__main__':
 	discord.utils.setup_logging(handler=console_handler)

@@ -1,3 +1,4 @@
+from dataclasses import dataclass
 import importlib
 import discord
 from discord import app_commands, ui
@@ -6,8 +7,8 @@ from utils.bypassUrl import bypass
 from utils.websiteSS import get_ss, BadURL, BadResponse
 from utils.dearrow import dearrow, VideoNotFound
 from utils import animalapi, paginator, paperjavadocs, translate, reverseImage
-from utils.speechbubble import Background, generate_speech_bubble
-from typing import Literal, Optional, List, TYPE_CHECKING, Union
+from utils.speechbubble import Background, Bubble, generate_speech_bubble
+from typing import Dict, Literal, Optional, List, TYPE_CHECKING, Tuple, Union
 import os
 import logging
 from time import perf_counter
@@ -22,18 +23,20 @@ logger = logging.getLogger(__name__)
 if TYPE_CHECKING:
 	from bot import UtilsBot
 
+@dataclass
+class BubbleSpeechOption:
+	background: Background
+	bubble: Bubble
+
+bubble_speech_current_options: Dict[Tuple[int,int],BubbleSpeechOption] = {} # Dict[Tuple[user_id,message_id],...]
+
 class BubbleSpeechBackGround(ui.Select):
 	def __init__(self, message: discord.Message, user_id: int, bot: 'UtilsBot'):
 		super().__init__(
 			placeholder='Change Image Background',
 			options=[
-				discord.SelectOption(label='Light',emoji=bot.custom_emojis.light,value='LIGHT'),
-				discord.SelectOption(label='Ash',emoji=bot.custom_emojis.ash,value='ASH'),
-				discord.SelectOption(label='Dark',emoji=bot.custom_emojis.dark,value='DARK'),
-				discord.SelectOption(label='Onyx',emoji=bot.custom_emojis.onyx,value='ONYX'),
-				discord.SelectOption(label='Legacy',emoji=bot.custom_emojis.legacy,value='LEGACY'),
-				discord.SelectOption(label='Old',emoji=bot.custom_emojis.old,value='OLD'),
-				discord.SelectOption(label='Mobile Dark',emoji=bot.custom_emojis.mobile_dark,value='MOBILE_DARK')
+				discord.SelectOption(label=background.name.title(),emoji=vars(bot.custom_emojis)[background.name.lower()],value=background.name)
+				for background in Background
 			]
 		)
 		self.message = message
@@ -52,7 +55,49 @@ class BubbleSpeechBackGround(ui.Select):
 		if not self.message.content:
 			return await interaction.response.send_message('Message must contain text',ephemeral=True)
 		await interaction.response.defer()
-		file = discord.File(await self.bot.loop.create_task(generate_speech_bubble(Background[self.values[0]],self.message)),'bubble-speech.gif')
+		option = bubble_speech_current_options.get((self.user_id,self.message.id))
+		if option:
+			option.background = Background[self.values[0]]
+		else:
+			option = BubbleSpeechOption(Background[self.values[0]],Bubble.ROUND)
+			bubble_speech_current_options[(self.user_id,self.message.id)] = option
+		file = discord.File(await self.bot.loop.create_task(generate_speech_bubble(option.background,self.message,option.bubble)),'bubble-speech.gif')
+		await interaction.followup.edit_message(message_id=interaction.message.id,attachments=[file])
+
+class BubbleSpeechBubbleType(ui.Select):
+	def __init__(self, message: discord.Message, user_id: int, bot: 'UtilsBot'):
+		super().__init__(
+			placeholder='Change Image Bubble Type',
+			options=[
+				discord.SelectOption(label='Round',emoji=f'\N{SPEECH BALLOON}',value=Bubble.ROUND.name),
+				discord.SelectOption(label='Rectangle',emoji=bot.custom_emojis.rectangle,value=Bubble.RECTANGLE.name),
+				discord.SelectOption(label='Thought',emoji=f'\N{THOUGHT BALLOON}',value=Bubble.THOUGHT.name),
+				discord.SelectOption(label='Transparent',emoji=bot.custom_emojis.transparent,value=Bubble.TRANSPARENT.name),
+			]
+		)
+		self.message = message
+		self.user_id = user_id
+		self.bot = bot
+	
+	async def interaction_check(self, interaction: discord.Interaction):
+		if interaction.user.id != self.user_id:
+			await interaction.response.send_message('Only whoever ran this command can interact with it',ephemeral=True)
+			return False
+		return True
+
+	async def callback(self, interaction: discord.Interaction):
+		if not interaction.message:
+			return await interaction.response.send_message('An error occurred :(',ephemeral=True)
+		if not self.message.content:
+			return await interaction.response.send_message('Message must contain text',ephemeral=True)
+		await interaction.response.defer()
+		option = bubble_speech_current_options.get((self.user_id,self.message.id))
+		if option:
+			option.bubble = Bubble[self.values[0]]
+		else:
+			option = BubbleSpeechOption(Background.DARK,Bubble[self.values[0]])
+			bubble_speech_current_options[(self.user_id,self.message.id)] = option
+		file = discord.File(await self.bot.loop.create_task(generate_speech_bubble(option.background,self.message,option.bubble)),'bubble-speech.gif')
 		await interaction.followup.edit_message(message_id=interaction.message.id,attachments=[file])
 
 async def paper_docs_autocomplete(interaction: discord.Interaction, current: str) -> List[app_commands.Choice[str]]:
@@ -143,9 +188,14 @@ class RandomCog(commands.Cog):
 		if not msg.content:
 			return await interaction.response.send_message('Message must contain text',ephemeral=True)
 		await interaction.response.defer()
+		view_msg = await interaction.original_response()
 		file = discord.File(await self.bot.loop.create_task(generate_speech_bubble(Background.DARK,msg)),'bubble-speech.gif')
 		view = ui.View(timeout=600)
 		view.add_item(BubbleSpeechBackGround(msg,interaction.user.id,self.bot))
+		view.add_item(BubbleSpeechBubbleType(msg,interaction.user.id,self.bot))
+		async def on_timeout():
+			await view_msg.edit(view=None)
+		view.on_timeout = on_timeout
 		await interaction.followup.send(file=file,view=view)
 
 	@app_commands.allowed_installs(guilds=True,users=True)

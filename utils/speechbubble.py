@@ -1,5 +1,6 @@
+from pilmoji import Pilmoji
 import requests
-from enum import Enum
+from enum import Enum 
 from io import BytesIO
 import textwrap
 from PIL import Image, ImageDraw, ImageFont, ImageOps
@@ -7,12 +8,11 @@ from discord import Asset, Member, Message
 
 from utils.sm_utils import caching
 
-#maybe in the future
-#class Bubble(StrEnum):
-#    RECTANGLE = 'bubbles/rectangle.png'
-#    THOUGHT = 'bubbles/thought.png'
-#    ROUND = 'bubbles/round.png'
-
+class Bubble(Enum):
+    RECTANGLE = BytesIO(open('bubbles/rectangle.png','rb').read())
+    THOUGHT = BytesIO(open('bubbles/thought.png','rb').read())
+    ROUND = BytesIO(open('bubbles/round.png','rb').read())
+    TRANSPARENT = BytesIO(open('bubbles/transparent.png','rb').read())
 class Background(Enum):
     LIGHT = (251, 251, 251)
     ASH = (50, 51, 57)
@@ -22,8 +22,12 @@ class Background(Enum):
     OLD = (55, 57, 61) #lol
     MOBILE_DARK = (28, 29, 34)
 
+text_font = ImageFont.truetype('bubbles/gg sans Medium.ttf',20)
+nick_font = ImageFont.truetype('bubbles/gg sans Bold.ttf',20)
+time_font = ImageFont.truetype('bubbles/gg sans Regular.ttf',15)
+
 @caching
-async def generate_speech_bubble(background: Background, message: Message) -> BytesIO:
+async def generate_speech_bubble(background: Background, message: Message, bubble: Bubble = Bubble.ROUND) -> BytesIO:
     assert message.content
     pfp_size = 50
     lines = textwrap.wrap(text=message.content,width=60)
@@ -43,28 +47,29 @@ async def generate_speech_bubble(background: Background, message: Message) -> By
     bg = Image.new('RGB',(w,h),color=background.value)
 
     #text
-    text_font = ImageFont.truetype('bubbles/gg sans Medium.ttf',20)
-    nick_font = ImageFont.truetype('bubbles/gg sans Bold.ttf',20)
-    time_font = ImageFont.truetype('bubbles/gg sans Regular.ttf',15)
+    global text_font
+    global nick_font
+    global time_font 
+    
     offset = 5
     for line in lines:
         bbox = dict(zip(('left', 'top', 'right', 'bottom'),text_font.getbbox(line)))
         new_h = int(bbox['bottom']-bbox['top']) + offset
         w = max(w,80+bbox['right']-bbox['left']+10)
         bg = bg.resize((w,bg.height+new_h))
-    draw = ImageDraw.Draw(bg)
-    draw.text((80,40),'\n'.join(lines),fill=(255,255,255) if background != Background.LIGHT else (77, 78, 83),font=text_font)
-    #nick
-    #draw.text((80,12),nick,fill=message.author.top_role.color.to_rgb() if isinstance(message.author,Member) else (255,255,255),font=nick_font)
-    draw.text((80,12),nick,fill=(255,255,255) if background != Background.LIGHT else (77, 78, 83),font=nick_font)
-    #time
-    draw.text((90+nick_font.getlength(nick),16),message.created_at.strftime('%H:%M %p').lstrip('0'),fill=(130, 131, 139),font=time_font) #eg. 1:40 PM
-
+    with Pilmoji(bg) as draw:
+        #message content
+        draw.text((80,40),'\n'.join(lines),fill=(255,255,255) if background != Background.LIGHT else (77, 78, 83),font=text_font,embedded_color=True,emoji_scale_factor=1.3)
+        #nick
+        draw.text((80,12),nick,fill=(255,255,255) if background != Background.LIGHT else (77, 78, 83),font=nick_font,embedded_color=True,emoji_scale_factor=1.3)
+        #time
+        draw.text((90+nick_font.getlength(nick),16),message.created_at.strftime('%H:%M %p'),fill=(130, 131, 139),font=time_font) #eg. 01:40 PM
+    
     #add pfp
     bg.paste(pfp_out,(pfp_pad,20),mask)
 
     #bubble speech
-    bubble_im = Image.open('bubbles/round.png')
+    bubble_im = Image.open(bubble.value)
     bubble_im = bubble_im.resize((bg.width,bubble_im.height))
     bg.paste(bubble_im,(0,0),bubble_im.convert('RGBA'))
     buffer = BytesIO()

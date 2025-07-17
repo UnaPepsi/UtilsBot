@@ -1,9 +1,8 @@
+from abc import ABC, abstractmethod
 from discord import ui, Interaction, InteractionMessage, ButtonStyle, utils
-from typing import List, TypeVar, Optional, Union, Generic
+from typing import List, Optional, Union
 
-T = TypeVar('T')
-
-class ChunkedPaginator(ui.View, Generic[T]):
+class ChunkedPaginator[T](ui.View, ABC):
 	index = 0
 	message: Optional[InteractionMessage] = None
 	def __init__(self, itr: List[T], timeout: Optional[Union[int,float]] = None):
@@ -17,6 +16,7 @@ class ChunkedPaginator(ui.View, Generic[T]):
 		self.go_foward.disabled = self.index == len(self.chunked)-1
 		self.go_last.disabled = self.index == len(self.chunked)-1
 
+	@abstractmethod
 	async def edit_embed(self, interaction: Interaction):
 		...
 
