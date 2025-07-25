@@ -10,6 +10,7 @@ from utils import animalapi, paginator, paperjavadocs, translate, reverseImage
 from utils.speechbubble import Background, Bubble, generate_speech_bubble
 from typing import Dict, Literal, Optional, List, TYPE_CHECKING, Tuple, Union
 import os
+from subprocess import Popen, PIPE
 import logging
 from time import perf_counter
 from asyncio import TimeoutError
@@ -467,9 +468,11 @@ class RandomCog(commands.Cog):
 	@app_commands.command(name='about')
 	async def about_bot(self, interaction: discord.Interaction):
 		"""Information about UtilsBot"""
+		
 		e = discord.Embed(title='About UtilsBot!',
-						description='UtilsBot is an open-source bot that serves quality of life features.\n This bot is and will always be free to use.',
+						description='UtilsBot is an open-source bot with useful quality-of-life features.\n This bot will always be free to use.',
 						color=0xff0000) #red
+
 		e.add_field(name=':bar_chart: Server Count',value=f'{len(self.bot.guilds)}',inline=False)
 		e.add_field(name=':man_raising_hand: Approx. Individual User Count',value=f'{(await self.bot.application_info()).approximate_user_install_count or 0}',inline=False)
 		e.add_field(name=':scroll: Author',value='[.guimx](https://guimx.codes)',inline=False)
@@ -477,6 +480,13 @@ class RandomCog(commands.Cog):
 		e.add_field(name=f'{self.bot.custom_emojis.github} Source Code',value='[GitHub](https://github.com/UnaPepsi/UtilsBot)',inline=False)
 		e.add_field(name=':man_police_officer: ToS',value='https://guimx.codes/rbot/tos',inline=False)
 		e.add_field(name=':detective: Privacy Policy',value='https://guimx.codes/rbot/privacypolicy',inline=False)
+		cmd = Popen(['git','log','--pretty=format:"%h %s"','-n','3'],stdout=PIPE)
+		if cmd.stdout:
+			commits = [commit.decode('utf-8')[1:].removesuffix('\n').removesuffix('"').split(' ',maxsplit=1) for commit in cmd.stdout.readlines()]
+			commit_field = ''
+			for commit in commits:
+				commit_field += f'\n[`{commit[0]}`](https://github.com/UnaPepsi/UtilsBot/commit/{commit[0]}) {commit[1][:68]+'...' if len(commit[1]) > 68 else commit[1]}'
+			e.add_field(name=':tools: Latest Changes',value=commit_field)
 		await interaction.response.send_message(embed=e)
 
 	@app_commands.allowed_installs(guilds=True,users=True)
